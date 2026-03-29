@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 究極スマホ版</title>
+    <title>STNV BEAT - 原点回帰スマホ版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        
         body {
             margin: 0; padding: 0; background-color: #000; color: #fff;
             font-family: 'DotGothic16', sans-serif; display: flex;
@@ -13,116 +14,131 @@
             touch-action: none; -webkit-user-select: none; user-select: none;
         }
         h1 { color: #ffd700; text-shadow: 2px 2px #f00; margin: 10px 0; font-size: 18px; }
+        
         #game_area {
             position: relative; width: 90vw; max-width: 340px; height: 60vh;
             background: #111; border: 4px double #0ff; border-radius: 10px;
             box-shadow: 0 0 15px #0ff; overflow: hidden; margin-bottom: 10px;
         }
+        
         #target_line {
             position: absolute; bottom: 50px; left: 0; width: 100%; height: 40px;
             background: rgba(255, 255, 255, 0.1); border-top: 2px dashed #fff;
             border-bottom: 2px dashed #fff; z-index: 10;
         }
+        
         .note { position: absolute; width: 50px; height: 50px; z-index: 5; image-rendering: pixelated; }
         .track-0 { left: 5%;   filter: drop-shadow(0 0 5px #ff00ff); }
         .track-1 { left: 28%;  filter: drop-shadow(0 0 5px #00ffff); }
         .track-2 { left: 51%;  filter: drop-shadow(0 0 5px #00ff00); }
         .track-3 { left: 74%;  filter: drop-shadow(0 0 5px #ff0000); }
+        
         #controls { display: flex; width: 95vw; max-width: 360px; justify-content: space-around; padding-bottom: 20px; }
         .btn {
             width: 20vw; max-width: 75px; height: 20vw; max-height: 75px;
             background: #222; border: 2px solid #fff; border-radius: 15px;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 0 #555; font-size: 24px;
+            box-shadow: 0 4px 0 #555; font-size: 24px; cursor: pointer;
         }
         .btn:active { transform: translateY(2px); box-shadow: 0 0 0 #555; background: #444 !important; }
         #btn_0 { border-color: #ff00ff; color: #ff00ff; }
         #btn_1 { border-color: #00ffff; color: #00ffff; }
         #btn_2 { border-color: #00ff00; color: #00ff00; }
         #btn_3 { border-color: #ff0000; color: #ff0000; }
+        
         #ui_board { display: flex; justify-content: space-between; width: 90vw; max-width: 340px; font-size: 14px; margin-bottom: 5px; }
+        
         #judgment_text {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
             font-size: 28px; font-weight: bold; text-shadow: 2px 2px #000; z-index: 20; opacity: 0;
         }
+        
         .cool { color: #0ff; animation: pop 0.3s ease-out; opacity: 1 !important; }
         .good { color: #0f0; animation: pop 0.3s ease-out; opacity: 1 !important; }
         .bad { color: #f00; animation: pop 0.3s ease-out; opacity: 1 !important; }
         .miss { color: #888; animation: pop 0.3s ease-out; opacity: 1 !important; }
         @keyframes pop { 0% { transform: translate(-50%,-40%) scale(0.8); } 50% { transform: translate(-50%,-50%) scale(1.2); } 100% { transform: translate(-50%,-50%) scale(1); } }
+        
         #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; margin-top: 10px; }
     </style>
 </head>
 <body>
+
     <h1>👿 vs 魔王バンブー 👿</h1>
     <div id="ui_board"><div>SCORE: <span id="score">0</span></div><div id="combo"></div></div>
     <div id="game_area"><div id="judgment_text"></div><div id="target_line"></div></div>
+    
     <div id="controls">
-        <div class="btn" id="btn_0" ontouchstart="handleInput(0, event)">⬅️</div>
-        <div class="btn" id="btn_1" ontouchstart="handleInput(1, event)">⬇️</div>
-        <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)">⬆️</div>
-        <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)">➡️</div>
+        <div class="btn" id="btn_0" ontouchstart="handleInput(0, event)" onmousedown="handleInput(0, event)">⬅️</div>
+        <div class="btn" id="btn_1" ontouchstart="handleInput(1, event)" onmousedown="handleInput(1, event)">⬇️</div>
+        <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)" onmousedown="handleInput(2, event)">⬆️</div>
+        <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)" onmousedown="handleInput(3, event)">➡️</div>
     </div>
-    <button id="start_btn" onclick="startGame()" disabled>⌛ ロード中...</button>
+    
+    <button id="start_btn" onclick="startGame()">👹 タップして開始！</button>
 
     <script>
         // --- ⚙️ 設定 ---
         const TARGET_Y = 250;
         const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
-        // ★音楽のURLも直リンクになるように修正しました
-        const BGM_URL = "https://raw.githubusercontent.com/stnavi2007-cpu/stnv-music/main/STNVEAT%201%20.mp3";
+        
+        // 元々動いていたURL
+        const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/refs/heads/main/STNVEAT%201%20.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
-        const BPM = 150; const SCROLL_TIME = 1.6; const OFFSET = 0.35; const NOTE_INTERVAL = 60 / BPM;
+        
+        const BPM = 150; 
+        const SCROLL_TIME = 1.6; 
+        const OFFSET = 0.35; // ズレ修正用（数字を大きくすると判定が遅くなります）
+        const NOTE_INTERVAL = 60 / BPM;
 
-        // --- 🧠 グローバル変数 ---
+        // --- 🧠 変数 ---
         const bgm = new Audio(BGM_URL);
-        bgm.preload = "auto";
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let seBuffer = null;
-        let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer, nextNoteTime, songDuration = 0;
+        
+        let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer, nextNoteTime;
 
-        // 要素を先に取得
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
         const judgeEl = document.getElementById('judgment_text');
         const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
 
-        // 効果音ロード
-        fetch(SE_URL).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buf => seBuffer = buf).catch(e=>console.log("SE Load Error"));
+        // 効果音の事前ロード
+        fetch(SE_URL)
+            .then(res => res.arrayBuffer())
+            .then(data => audioCtx.decodeAudioData(data))
+            .then(buf => seBuffer = buf)
+            .catch(e => console.log("SE Load Error"));
 
-        // ★僕のミス修正１：ちゃんとボタンのロックを外す（disabled = false）
-        bgm.addEventListener("canplaythrough", () => {
-            if (!isPlaying) {
-                startBtn.disabled = false; // 👈 ここを書き忘れていました！！
-                startBtn.innerText = "👹 タップで開始！";
-                songDuration = bgm.duration || 180;
-            }
-        }, { once: true });
-
-        // ★僕のミス修正２：3秒経ったら強制的にロックを外す
-        setTimeout(() => { 
-            if(!isPlaying) {
-                startBtn.disabled = false; // 👈 ここも書き忘れていました！！
-                startBtn.innerText = "👹 強制開始！"; 
-            }
-        }, 3000);
-
+        // ゲーム開始処理（ボタンを押した瞬間に全部動かす）
         function startGame() {
             if (isPlaying) return;
+            
+            // スマホの音声を許可する
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
             startBtn.style.display = 'none';
-            isPlaying = true; score = 0; combo = 0;
-            notes.forEach(n => n.el.remove()); notes = [];
-            updateUI();
+            judgeEl.innerText = "";
             
+            // 音楽を再生
             bgm.currentTime = 0;
-            bgm.play().catch(e => console.log("Music play blocked, but game starts."));
+            bgm.play().then(() => {
+                // 再生できたらゲームループ開始
+                isPlaying = true; 
+                score = 0; 
+                combo = 0;
+                notes.forEach(n => n.el.remove()); 
+                notes = [];
+                updateUI();
+                
+                nextNoteTime = SCROLL_TIME - OFFSET;
+                gameTimer = setInterval(update, 1000 / 60);
+            }).catch(e => {
+                alert("エラー: もう一度ボタンを押してください！");
+                startBtn.style.display = 'block';
+            });
             
-            songDuration = bgm.duration || 180;
-            nextNoteTime = SCROLL_TIME - OFFSET;
-            gameTimer = setInterval(update, 1000 / 60);
             bgm.onended = endGame;
         }
 
@@ -144,17 +160,27 @@
 
         function update() {
             if (!isPlaying) return;
-            const currentTime = bgm.currentTime || (performance.now() - (songStartTime || performance.now()))/1000;
+            const currentTime = bgm.currentTime;
             
-            if (currentTime + 1.5 < songDuration && currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
-                if (Math.random() < 0.4) spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
+            // ノーツ生成
+            if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
+                if (Math.random() < 0.05) { 
+                    spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
+                    spawn((Math.floor(Math.random() * 3)+1)%4, nextNoteTime + OFFSET);
+                } else if (Math.random() < 0.40) { 
+                    spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
+                }
                 nextNoteTime += NOTE_INTERVAL;
             }
 
+            // ノーツ移動
             notes.forEach(n => {
                 if (!n.active) return;
                 const progress = 1 - ((n.targetTime - currentTime) / SCROLL_TIME);
-                n.el.style.top = (progress * TARGET_Y) + "px";
+                n.y = progress * TARGET_Y;
+                n.el.style.top = n.y + "px";
+                
+                // 見逃し
                 if (currentTime > n.targetTime + 0.3) {
                     n.active = false; n.el.style.opacity = 0;
                     if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
@@ -164,23 +190,36 @@
         }
 
         function handleInput(track, event) {
-            if (event) event.preventDefault();
+            if (event) event.preventDefault(); // スマホの画面ズームなどを防ぐ
             if (!isPlaying) return;
-            playHitSound();
+            
+            playHitSound(); // 太鼓の音
+            
             const currentTime = bgm.currentTime;
             const target = notes.filter(n => n.track === track && n.active)
                              .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
+                             
             if (!target) return;
+            
             const diff = Math.abs(currentTime - target.targetTime);
-            if (diff < 0.25) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
-            else if (diff < 0.45) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
+            
+            // 判定処理
+            if (diff < 0.22) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
+            else if (diff < 0.40) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
+            else if (diff < 0.55) { score += 10; combo = 0; showJudge("BAD", "bad"); target.active = false; target.el.style.opacity = 0.3; }
             updateUI();
         }
 
         function removeNote(n) { n.active = false; n.el.remove(); }
         function showJudge(txt, cls) { judgeEl.innerText = txt; judgeEl.className = cls; judgeEl.style.animation = 'none'; judgeEl.offsetHeight; judgeEl.style.animation = null; }
         function updateUI() { scoreEl.innerText = score; comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; }
-        function endGame() { isPlaying = false; clearInterval(gameTimer); bgm.pause(); notes.forEach(n => n.el.remove()); startBtn.style.display = 'block'; startBtn.innerText = "リベンジ！"; }
+        
+        function endGame() { 
+            isPlaying = false; clearInterval(gameTimer); bgm.pause(); 
+            notes.forEach(n => n.el.remove()); 
+            startBtn.style.display = 'block'; startBtn.innerText = "リベンジ！"; 
+            judgeEl.innerText = "FINISH!"; judgeEl.className = "cool";
+        }
     </script>
 </body>
 </html>
