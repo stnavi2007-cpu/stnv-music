@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 60ノーツ大会仕様</title>
+    <title>STNV BEAT - BPM完全同期版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -79,15 +79,21 @@
         <div class="btn" id="btn_3">➡️</div>
     </div>
     
-    <button id="start_btn" onclick="startGame()">👹 大会スタート！（60ノーツ）</button>
+    <button id="start_btn" onclick="startGame()">👹 大会スタート！（BPM同期60個）</button>
 
     <script>
         // --- ⚙️ 設定 ---
         const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/main/STNVEAT%EF%BC%91.mp3";
         const SCROLL_TIME = 1.6; 
         
-        const TOTAL_NOTES = 60;  // ★絶妙なバランスの60個！
-        const SCORE_PER_COOL = 10000 / TOTAL_NOTES; // ★内部では割り切れない数字で正確に計算
+        const BPM = 150; 
+        const TOTAL_NOTES = 60; // リズムに乗れる60個
+        const SCORE_PER_COOL = 10000 / TOTAL_NOTES;
+
+        // ★BPMから「拍」の秒数を正確に計算
+        const BEAT = 60 / BPM;       // 表拍 (0.4秒)
+        const HALF_BEAT = BEAT / 2;  // 裏拍 (0.2秒)
+        const QUART_BEAT = BEAT / 4; // 16分音符 (0.1秒)
 
         // --- 🧠 変数 ---
         const bgm = new Audio(BGM_URL);
@@ -115,25 +121,37 @@
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
+        // ★超進化：BPMのマス目にピッタリ合わせた譜面生成
         function generateStage() {
             pendingNotes = [];
-            let times = [];
+            let gridTimes = [];
             
-            // 2.0秒 ～ 39.0秒の間に60個
-            for (let i = 0; i < TOTAL_NOTES; i++) {
-                times.push(2.0 + Math.random() * 37.0); 
+            // 2.0秒から39.0秒までの間で、「裏拍(0.2秒刻み)」の枠を全部用意する
+            for (let t = 2.0; t <= 39.0; t += HALF_BEAT) {
+                gridTimes.push(t);
+                
+                // 30%の確率で、さらにその半分の「16分音符（タタッ！）」を混ぜる
+                if (Math.random() < 0.3) {
+                    gridTimes.push(t + QUART_BEAT);
+                }
             }
-            times.sort((a, b) => a - b); 
 
+            // 用意したマス目の中から、ランダムに「60個」だけ選ぶ
+            gridTimes.sort(() => Math.random() - 0.5); 
+            let selectedTimes = gridTimes.slice(0, TOTAL_NOTES);
+            selectedTimes.sort((a, b) => a - b); // 時間順に並び直す
+
+            // 選ばれた時間にレーン（列）を割り当てる
             for (let i = 0; i < TOTAL_NOTES; i++) {
                 let trk = Math.floor(Math.random() * 4);
-                // 完全に重なるのを防ぐ
-                if (i > 0 && times[i] - times[i-1] < 0.1) {
+                
+                // 16分音符のような超高速連打(0.1秒差)の時は、同じ指だとキツイので必ず別のレーンにする配慮
+                if (i > 0 && selectedTimes[i] - selectedTimes[i-1] < 0.15) {
                     if (pendingNotes[i-1].track === trk) {
                         trk = (trk + 1 + Math.floor(Math.random() * 3)) % 4;
                     }
                 }
-                pendingNotes.push({ targetTime: times[i], track: trk });
+                pendingNotes.push({ targetTime: selectedTimes[i], track: trk });
             }
         }
 
@@ -246,7 +264,7 @@
             
             if (diff <= 0.05) {  
                 combo++;
-                score += SCORE_PER_COOL; // ★内部加算
+                score += SCORE_PER_COOL; 
                 showJudge("COOL!!", "cool"); 
                 removeNote(target); 
             } else if (diff <= 0.10) { 
@@ -282,7 +300,6 @@
         }
 
         function updateUI() { 
-            // ★画面に出す時だけ四捨五入して、綺麗な数字にする！
             scoreEl.innerText = Math.round(score); 
             comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; 
         }
@@ -296,7 +313,6 @@
             activeNotes.forEach(n => n.el.remove()); 
             activeNotes = [];
             
-            // ★最終スコアも四捨五入して表示
             judgeEl.innerHTML = `FINISH!<br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${Math.round(score)}</span><br><span style="font-size: 14px; color: #fff;">(MAX: 10000)</span>`; 
             judgeEl.className = "cool";
             judgeEl.style.opacity = 1; 
