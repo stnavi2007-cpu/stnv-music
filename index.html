@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 原点回帰スマホ版</title>
+    <title>STNV BEAT - 最終完全版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -50,7 +50,7 @@
         
         #judgment_text {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 28px; font-weight: bold; text-shadow: 2px 2px #000; z-index: 20; opacity: 0;
+            font-size: 28px; font-weight: bold; text-shadow: 2px 2px #000; z-index: 20; opacity: 0; pointer-events: none;
         }
         
         .cool { color: #0ff; animation: pop 0.3s ease-out; opacity: 1 !important; }
@@ -82,13 +82,13 @@
         const TARGET_Y = 250;
         const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
         
-        // 元々動いていたURL
-        const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/refs/heads/main/STNVEAT%201%20.mp3";
+        // ★正しいファイル名のURLに修正しました（rawリンク）
+        const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/main/STNVEAT%EF%BC%91.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
         
         const BPM = 150; 
         const SCROLL_TIME = 1.6; 
-        const OFFSET = 0.35; // ズレ修正用（数字を大きくすると判定が遅くなります）
+        const OFFSET = 0.35; 
         const NOTE_INTERVAL = 60 / BPM;
 
         // --- 🧠 変数 ---
@@ -97,6 +97,7 @@
         let seBuffer = null;
         
         let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer, nextNoteTime;
+        let fallbackStartTime = 0;
 
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
@@ -104,42 +105,39 @@
         const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
 
-        // 効果音の事前ロード
+        // 効果音ロード
         fetch(SE_URL)
             .then(res => res.arrayBuffer())
             .then(data => audioCtx.decodeAudioData(data))
             .then(buf => seBuffer = buf)
             .catch(e => console.log("SE Load Error"));
 
-        // ゲーム開始処理（ボタンを押した瞬間に全部動かす）
         function startGame() {
             if (isPlaying) return;
             
-            // スマホの音声を許可する
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
             startBtn.style.display = 'none';
             judgeEl.innerText = "";
             
-            // 音楽を再生
-            bgm.currentTime = 0;
-            bgm.play().then(() => {
-                // 再生できたらゲームループ開始
-                isPlaying = true; 
-                score = 0; 
-                combo = 0;
-                notes.forEach(n => n.el.remove()); 
-                notes = [];
-                updateUI();
-                
-                nextNoteTime = SCROLL_TIME - OFFSET;
-                gameTimer = setInterval(update, 1000 / 60);
-            }).catch(e => {
-                alert("エラー: もう一度ボタンを押してください！");
-                startBtn.style.display = 'block';
-            });
+            isPlaying = true; 
+            score = 0; 
+            combo = 0;
+            notes.forEach(n => n.el.remove()); 
+            notes = [];
+            updateUI();
             
+            nextNoteTime = SCROLL_TIME - OFFSET;
+            fallbackStartTime = performance.now(); // 時計スタート
+            
+            bgm.currentTime = 0;
+            bgm.play().catch(e => console.log("Audio Error:", e));
+            
+            gameTimer = setInterval(update, 1000 / 60);
             bgm.onended = endGame;
+
+            // 曲が終わらなくても3分(180秒)で終了させる安全装置
+            setTimeout(() => { if(isPlaying) endGame(); }, 180000);
         }
 
         function playHitSound() {
@@ -160,9 +158,10 @@
 
         function update() {
             if (!isPlaying) return;
-            const currentTime = bgm.currentTime;
             
-            // ノーツ生成
+            // 音楽が鳴らなくても時計で絶対にゲームが進む
+            let currentTime = bgm.currentTime > 0 ? bgm.currentTime : (performance.now() - fallbackStartTime) / 1000;
+            
             if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
                 if (Math.random() < 0.05) { 
                     spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
@@ -173,14 +172,12 @@
                 nextNoteTime += NOTE_INTERVAL;
             }
 
-            // ノーツ移動
             notes.forEach(n => {
                 if (!n.active) return;
                 const progress = 1 - ((n.targetTime - currentTime) / SCROLL_TIME);
                 n.y = progress * TARGET_Y;
                 n.el.style.top = n.y + "px";
                 
-                // 見逃し
                 if (currentTime > n.targetTime + 0.3) {
                     n.active = false; n.el.style.opacity = 0;
                     if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
@@ -190,12 +187,12 @@
         }
 
         function handleInput(track, event) {
-            if (event) event.preventDefault(); // スマホの画面ズームなどを防ぐ
+            if (event) event.preventDefault(); 
             if (!isPlaying) return;
             
-            playHitSound(); // 太鼓の音
+            playHitSound();
             
-            const currentTime = bgm.currentTime;
+            let currentTime = bgm.currentTime > 0 ? bgm.currentTime : (performance.now() - fallbackStartTime) / 1000;
             const target = notes.filter(n => n.track === track && n.active)
                              .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
                              
@@ -203,7 +200,6 @@
             
             const diff = Math.abs(currentTime - target.targetTime);
             
-            // 判定処理
             if (diff < 0.22) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
             else if (diff < 0.40) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
             else if (diff < 0.55) { score += 10; combo = 0; showJudge("BAD", "bad"); target.active = false; target.el.style.opacity = 0.3; }
