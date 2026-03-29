@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 大会用バンビート</title>
+    <title>STNV BEAT - BPM完全同期版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -61,14 +61,7 @@
         .miss { color: #888; animation: pop 0.2s ease-out; opacity: 1 !important; }
         @keyframes pop { 0% { transform: translate(-50%,-40%) scale(0.8); } 50% { transform: translate(-50%,-50%) scale(1.2); } 100% { transform: translate(-50%,-50%) scale(1); } }
         
-        #start_screen {
-            display: flex; flex-direction: column; align-items: center; margin-top: 10px;
-        }
-        #student_id {
-            padding: 10px; font-size: 16px; margin-bottom: 10px; font-family: 'DotGothic16'; 
-            text-align: center; border: 2px solid #fff; background: #222; color: #fff; border-radius: 5px;
-        }
-        #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; cursor: pointer; }
+        #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -77,7 +70,6 @@
 
     <h1>🎋 魔王のバンビート 🎋</h1>
     <div id="ui_board"><div>SCORE: <span id="score">0</span> / 10000</div><div id="combo"></div></div>
-    
     <div id="game_area"><div id="judgment_text"></div><div id="target_line"></div></div>
     
     <div id="controls">
@@ -87,11 +79,7 @@
         <div class="btn" id="btn_3">➡️</div>
     </div>
     
-    <div id="start_screen">
-        <input type="text" id="student_id" placeholder="生徒ID（名前）を入力">
-        <button id="start_btn" onclick="startGame()">バンビート🎋スタート！</button>
-        <p style="color: #ff4444; font-size: 12px; margin-top: 10px;">※一発勝負！リロードすると失格になります</p>
-    </div>
+    <button id="start_btn" onclick="startGame()">バンビート🎋スタート！</button>
 
     <script>
         // --- ⚙️ 設定 ---
@@ -99,11 +87,12 @@
         const SCROLL_TIME = 1.6; 
         
         const BPM = 150; 
-        const TOTAL_NOTES = 50; // ★王道の50個
-        const SCORE_PER_COOL = 10000 / TOTAL_NOTES;
+        const TOTAL_NOTES = 50; // ★王道の50個に変更！
+        const SCORE_PER_COOL = 10000 / TOTAL_NOTES; // 1個200点
 
-        const BEAT = 60 / BPM;       
-        const HALF_BEAT = BEAT / 2;  
+        // ★BPMから「拍」の秒数を正確に計算
+        const BEAT = 60 / BPM;       // 表拍 (0.4秒)
+        const HALF_BEAT = BEAT / 2;  // 裏拍 (0.2秒)
 
         // --- 🧠 変数 ---
         const bgm = new Audio(BGM_URL);
@@ -112,34 +101,13 @@
         let pendingNotes = []; 
         let activeNotes = [];  
         let score = 0, combo = 0, isPlaying = false, gameTimer;
-        let currentStudentId = "";
 
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
         const judgeEl = document.getElementById('judgment_text');
-        const startScreen = document.getElementById('start_screen');
+        const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
         const bambooImgSrc = document.getElementById('preload_img').src;
-
-        // ズル防止チェック
-        window.onload = () => {
-            const played = localStorage.getItem("bambeat_played");
-            const savedScore = localStorage.getItem("bambeat_score");
-            const savedId = localStorage.getItem("bambeat_id");
-
-            if (played === "true") {
-                startScreen.style.display = "none";
-                document.getElementById('controls').style.pointerEvents = 'none'; 
-                
-                if (savedScore !== null) {
-                    judgeEl.innerHTML = `FINISH!<br><span style="font-size: 16px;">ID: ${savedId}</span><br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${savedScore}</span><br><span style="font-size: 12px; color: #fff;">プレイ済みです</span>`;
-                } else {
-                    judgeEl.innerHTML = `失格<br><span style="font-size: 16px;">ID: ${savedId}</span><br><span style="font-size: 20px; color: #f00;">途中リタイア (スコア: 0)</span>`;
-                }
-                judgeEl.className = "cool";
-                judgeEl.style.opacity = 1; 
-            }
-        };
 
         for (let i = 0; i < 4; i++) {
             const btn = document.getElementById(`btn_${i}`);
@@ -152,12 +120,12 @@
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
-        // ★神調整：表拍・裏拍のみ ＆ 2個同時押し対応
+        // ★神調整：表拍・裏拍のみ ＆ たまに2個同時 ＆ ピッタリ50個
         function generateStage() {
             pendingNotes = [];
             let gridTimes = [];
             
-            // 2.0秒から39.0秒までの間で、「表・裏」の枠を全部用意する
+            // 2.0秒から39.0秒までの間で、「表・裏」の枠を全部用意する（16分音符はなし！）
             for (let t = 2.0; t <= 39.0; t += HALF_BEAT) {
                 gridTimes.push(t);
             }
@@ -199,18 +167,9 @@
         function startGame() {
             if (isPlaying) return;
             
-            currentStudentId = document.getElementById('student_id').value.trim();
-            if (currentStudentId === "") {
-                alert("生徒ID（名前）を入力してください！");
-                return;
-            }
-
-            localStorage.setItem("bambeat_played", "true");
-            localStorage.setItem("bambeat_id", currentStudentId);
-            
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
-            startScreen.style.display = 'none';
+            startBtn.style.display = 'none';
             judgeEl.innerText = "";
             judgeEl.style.opacity = 0; 
             
@@ -363,14 +322,9 @@
             activeNotes.forEach(n => n.el.remove()); 
             activeNotes = [];
             
-            let finalScore = Math.round(score);
-            localStorage.setItem("bambeat_score", finalScore);
-            
-            judgeEl.innerHTML = `FINISH!<br><span style="font-size: 16px;">ID: ${currentStudentId}</span><br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${finalScore}</span><br><span style="font-size: 14px; color: #fff;">先生に見せてね！</span>`; 
+            judgeEl.innerHTML = `FINISH!<br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${Math.round(score)}</span><br><span style="font-size: 14px; color: #fff;">(MAX: 10000)</span>`; 
             judgeEl.className = "cool";
             judgeEl.style.opacity = 1; 
-
-            document.getElementById('controls').style.pointerEvents = 'none'; 
         }
     </script>
 </body>
