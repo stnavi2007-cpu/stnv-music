@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 大会用100ノーツ版</title>
+    <title>STNV BEAT - 60ノーツ大会仕様</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -79,17 +79,15 @@
         <div class="btn" id="btn_3">➡️</div>
     </div>
     
-    <button id="start_btn" onclick="startGame()">👹 大会スタート！（100ノーツ）</button>
+    <button id="start_btn" onclick="startGame()">👹 大会スタート！（60ノーツ）</button>
 
     <script>
         // --- ⚙️ 設定 ---
         const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/main/STNVEAT%EF%BC%91.mp3";
         const SCROLL_TIME = 1.6; 
         
-        // ★ご要望通り100個に倍増！
-        const TOTAL_NOTES = 100;  
-        // ★100個 × 100点 ＝ ピッタリ10000点満点
-        const SCORE_PER_COOL = 100; 
+        const TOTAL_NOTES = 60;  // ★絶妙なバランスの60個！
+        const SCORE_PER_COOL = 10000 / TOTAL_NOTES; // ★内部では割り切れない数字で正確に計算
 
         // --- 🧠 変数 ---
         const bgm = new Audio(BGM_URL);
@@ -121,7 +119,7 @@
             pendingNotes = [];
             let times = [];
             
-            // 2.0秒 ～ 39.0秒 (終了3秒前) の間に100個の時間をランダムに決める
+            // 2.0秒 ～ 39.0秒の間に60個
             for (let i = 0; i < TOTAL_NOTES; i++) {
                 times.push(2.0 + Math.random() * 37.0); 
             }
@@ -129,6 +127,7 @@
 
             for (let i = 0; i < TOTAL_NOTES; i++) {
                 let trk = Math.floor(Math.random() * 4);
+                // 完全に重なるのを防ぐ
                 if (i > 0 && times[i] - times[i-1] < 0.1) {
                     if (pendingNotes[i-1].track === trk) {
                         trk = (trk + 1 + Math.floor(Math.random() * 3)) % 4;
@@ -247,12 +246,12 @@
             
             if (diff <= 0.05) {  
                 combo++;
-                score += SCORE_PER_COOL; // ★+100点
+                score += SCORE_PER_COOL; // ★内部加算
                 showJudge("COOL!!", "cool"); 
                 removeNote(target); 
             } else if (diff <= 0.10) { 
                 combo++;
-                score += SCORE_PER_COOL / 2; // ★+50点
+                score += SCORE_PER_COOL / 2; 
                 showJudge("GOOD", "good"); 
                 removeNote(target); 
             } else if (diff <= 0.15) { 
@@ -283,7 +282,8 @@
         }
 
         function updateUI() { 
-            scoreEl.innerText = score; 
+            // ★画面に出す時だけ四捨五入して、綺麗な数字にする！
+            scoreEl.innerText = Math.round(score); 
             comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; 
         }
         
@@ -296,7 +296,8 @@
             activeNotes.forEach(n => n.el.remove()); 
             activeNotes = [];
             
-            judgeEl.innerHTML = `FINISH!<br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${score}</span><br><span style="font-size: 14px; color: #fff;">(MAX: 10000)</span>`; 
+            // ★最終スコアも四捨五入して表示
+            judgeEl.innerHTML = `FINISH!<br><span style="font-size: 24px; color: #ffd700;">最終スコア: ${Math.round(score)}</span><br><span style="font-size: 14px; color: #fff;">(MAX: 10000)</span>`; 
             judgeEl.className = "cool";
             judgeEl.style.opacity = 1; 
         }
