@@ -94,7 +94,6 @@
         let seBuffer = null;
         
         let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer, nextNoteTime;
-        let fallbackStartTime = 0;
 
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
@@ -125,7 +124,6 @@
             updateUI();
             
             nextNoteTime = SCROLL_TIME - OFFSET;
-            fallbackStartTime = performance.now(); 
             
             bgm.currentTime = 0;
             bgm.play().catch(e => console.log("Audio Error:", e));
@@ -155,7 +153,8 @@
         function update() {
             if (!isPlaying) return;
             
-            let currentTime = bgm.currentTime > 0 ? bgm.currentTime : (performance.now() - fallbackStartTime) / 1000;
+            // ★絶対に時間がワープしないように、音楽の純粋な再生時間だけを使います
+            let currentTime = bgm.currentTime;
             
             if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
                 if (Math.random() < 0.05) { 
@@ -167,14 +166,17 @@
                 nextNoteTime += NOTE_INTERVAL;
             }
 
+            // ★ターゲットライン（点線）の中心にピッタリ落ちる高さを計算
+            const targetY = gameArea.clientHeight - 90;
+
             notes.forEach(n => {
                 if (!n.active) return;
                 const progress = 1 - ((n.targetTime - currentTime) / SCROLL_TIME);
                 
-                // ★固定の250pxをやめて、画面サイズに合わせて一番下まで落ちるように修正！
-                n.y = progress * (gameArea.clientHeight - 80); 
+                n.y = progress * targetY; 
                 n.el.style.top = n.y + "px";
                 
+                // ラインを完全に通り過ぎてから「見逃し（MISS）」で消える
                 if (currentTime > n.targetTime + 0.3) {
                     n.active = false; n.el.style.opacity = 0;
                     if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
@@ -189,7 +191,7 @@
             
             playHitSound();
             
-            let currentTime = bgm.currentTime > 0 ? bgm.currentTime : (performance.now() - fallbackStartTime) / 1000;
+            let currentTime = bgm.currentTime;
             const target = notes.filter(n => n.track === track && n.active)
                              .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
                              
@@ -197,9 +199,10 @@
             
             const diff = Math.abs(currentTime - target.targetTime);
             
-            if (diff < 0.22) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
-            else if (diff < 0.40) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
-            else if (diff < 0.55) { score += 10; combo = 0; showJudge("BAD", "bad"); target.active = false; target.el.style.opacity = 0.3; }
+            // ★判定を「ラインのすぐ近く」に絞りました。これで連打しても空中で消えません！
+            if (diff < 0.15) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
+            else if (diff < 0.25) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
+            else if (diff < 0.35) { score += 10; combo = 0; showJudge("BAD", "bad"); removeNote(target); }
             updateUI();
         }
 
