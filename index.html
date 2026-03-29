@@ -63,13 +63,14 @@
         <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)">⬆️</div>
         <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)">➡️</div>
     </div>
-    <button id="start_btn" onclick="startGame()">👹 強制開始（ロード無視！）</button>
+    <button id="start_btn" onclick="startGame()" disabled>⌛ ロード中...</button>
 
     <script>
         // --- ⚙️ 設定 ---
         const TARGET_Y = 250;
         const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
-        const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/refs/heads/main/STNVEAT%201%20.mp3";
+        // ★音楽のURLも直リンクになるように修正しました
+        const BGM_URL = "https://raw.githubusercontent.com/stnavi2007-cpu/stnv-music/main/STNVEAT%201%20.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
         const BPM = 150; const SCROLL_TIME = 1.6; const OFFSET = 0.35; const NOTE_INTERVAL = 60 / BPM;
 
@@ -90,16 +91,22 @@
         // 効果音ロード
         fetch(SE_URL).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buf => seBuffer = buf).catch(e=>console.log("SE Load Error"));
 
-        // 音楽ロード完了待機
+        // ★僕のミス修正１：ちゃんとボタンのロックを外す（disabled = false）
         bgm.addEventListener("canplaythrough", () => {
             if (!isPlaying) {
+                startBtn.disabled = false; // 👈 ここを書き忘れていました！！
                 startBtn.innerText = "👹 タップで開始！";
                 songDuration = bgm.duration || 180;
             }
         }, { once: true });
 
-        // もし5秒経ってもロードが終わらなければボタンを強制的に出す
-        setTimeout(() => { if(!isPlaying) startBtn.innerText = "👹 強制開始！"; }, 5000);
+        // ★僕のミス修正２：3秒経ったら強制的にロックを外す
+        setTimeout(() => { 
+            if(!isPlaying) {
+                startBtn.disabled = false; // 👈 ここも書き忘れていました！！
+                startBtn.innerText = "👹 強制開始！"; 
+            }
+        }, 3000);
 
         function startGame() {
             if (isPlaying) return;
