@@ -50,7 +50,7 @@
         .bad { color: #f00; animation: pop 0.3s ease-out; opacity: 1 !important; }
         .miss { color: #888; animation: pop 0.3s ease-out; opacity: 1 !important; }
         @keyframes pop { 0% { transform: translate(-50%,-40%) scale(0.8); } 50% { transform: translate(-50%,-50%) scale(1.2); } 100% { transform: translate(-50%,-50%) scale(1); } }
-        #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; margin-top: 10px; }
+        #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; margin-top: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -58,12 +58,12 @@
     <div id="ui_board"><div>SCORE: <span id="score">0</span></div><div id="combo"></div></div>
     <div id="game_area"><div id="judgment_text"></div><div id="target_line"></div></div>
     <div id="controls">
-        <div class="btn" id="btn_0" ontouchstart="handleInput(0, event)">⬅️</div>
-        <div class="btn" id="btn_1" ontouchstart="handleInput(1, event)">⬇️</div>
-        <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)">⬆️</div>
-        <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)">➡️</div>
+        <div class="btn" id="btn_0" ontouchstart="handleInput(0, event)" onmousedown="handleInput(0, event)">⬅️</div>
+        <div class="btn" id="btn_1" ontouchstart="handleInput(1, event)" onmousedown="handleInput(1, event)">⬇️</div>
+        <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)" onmousedown="handleInput(2, event)">⬆️</div>
+        <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)" onmousedown="handleInput(3, event)">➡️</div>
     </div>
-    <button id="start_btn" onclick="startGame()">👹 強制開始（ロード無視！）</button>
+    <button id="start_btn" onclick="startGame()">👹 ゲーム開始！</button>
 
     <script>
         // --- ⚙️ 設定 ---
@@ -71,86 +71,113 @@
         const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
         const BGM_URL = "https://raw.githubusercontent.com/stnavi2007-cpu/stnv-music/main/STNVEAT%201%20.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
-        const BPM = 150; const SCROLL_TIME = 1.6; const OFFSET = 0.35; const NOTE_INTERVAL = 60 / BPM;
+        const BPM = 150; 
+        const SCROLL_TIME = 1.6; 
+        const OFFSET = 0.35; 
+        const NOTE_INTERVAL = 60 / BPM;
 
         // --- 🧠 グローバル変数 ---
-        const bgm = new Audio(BGM_URL);
-        bgm.preload = "auto";
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let audioCtx = null;
+        let bgm = new Audio(BGM_URL);
         let seBuffer = null;
-        let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer, nextNoteTime, songDuration = 0;
+        let notes = [], score = 0, combo = 0, isPlaying = false, gameTimer;
+        let nextNoteTime = 0;
 
-        // 要素を先に取得
         const scoreEl = document.getElementById('score');
         const comboEl = document.getElementById('combo');
         const judgeEl = document.getElementById('judgment_text');
         const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
 
-        // 効果音ロード
-        fetch(SE_URL).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buf => seBuffer = buf).catch(e=>console.log("SE Load Error"));
-
-        // 音楽ロード完了待機
-        bgm.addEventListener("canplaythrough", () => {
-            if (!isPlaying) {
-                startBtn.innerText = "👹 タップで開始！";
-                songDuration = bgm.duration || 180;
+        // 効果音の事前読み込み関数
+        async function loadAssets() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (seBuffer) return; 
+            try {
+                const res = await fetch(SE_URL);
+                const data = await res.arrayBuffer();
+                seBuffer = await audioCtx.decodeAudioData(data);
+            } catch (e) {
+                console.log("Assets Load Error: ", e);
             }
-        }, { once: true });
-
-        // もし5秒経ってもロードが終わらなければボタンを強制的に出す
-        setTimeout(() => { if(!isPlaying) startBtn.innerText = "👹 強制開始！"; }, 5000);
+        }
 
         function startGame() {
             if (isPlaying) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            // ユーザーアクション内でオーディオを初期化（ブラウザ制限対策）
+            loadAssets();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             
             startBtn.style.display = 'none';
-            isPlaying = true; score = 0; combo = 0;
-            notes.forEach(n => n.el.remove()); notes = [];
+            isPlaying = true; 
+            score = 0; 
+            combo = 0;
             updateUI();
             
+            // ノーツクリア
+            notes.forEach(n => { if(n.el) n.el.remove(); });
+            notes = [];
+
+            // BGM再生
             bgm.currentTime = 0;
-            bgm.play().catch(e => console.log("Music play blocked, but game starts."));
+            bgm.play().catch(e => console.log("Music play blocked: ", e));
             
-            songDuration = bgm.duration || 180;
+            // ゲームループ開始
             nextNoteTime = SCROLL_TIME - OFFSET;
             gameTimer = setInterval(update, 1000 / 60);
+            
             bgm.onended = endGame;
         }
 
         function playHitSound() {
-            if (!seBuffer) return;
+            if (!seBuffer || !audioCtx) return;
             const source = audioCtx.createBufferSource();
             source.buffer = seBuffer;
-            const gainNode = audioCtx.createGain(); gainNode.gain.value = 1.5;
-            source.connect(gainNode); gainNode.connect(audioCtx.destination);
+            const gainNode = audioCtx.createGain(); 
+            gainNode.gain.value = 0.8;
+            source.connect(gainNode); 
+            gainNode.connect(audioCtx.destination);
             source.start(0);
         }
 
         function spawn(track, targetTime) {
             const el = document.createElement('img');
-            el.src = BAMBOO_IMG; el.className = `note track-${track}`;
-            el.style.top = "-60px"; gameArea.appendChild(el);
+            el.src = BAMBOO_IMG; 
+            el.className = `note track-${track}`;
+            el.style.top = "-60px"; 
+            gameArea.appendChild(el);
             notes.push({ el, track, targetTime, active: true });
         }
 
         function update() {
             if (!isPlaying) return;
-            const currentTime = bgm.currentTime || (performance.now() - (songStartTime || performance.now()))/1000;
             
-            if (currentTime + 1.5 < songDuration && currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
-                if (Math.random() < 0.4) spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
+            const currentTime = bgm.currentTime;
+
+            // ノーツ生成ロジック
+            if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
+                if (Math.random() < 0.5) { // 生成頻度
+                    spawn(Math.floor(Math.random() * 4), nextNoteTime + OFFSET);
+                }
                 nextNoteTime += NOTE_INTERVAL;
             }
 
+            // ノーツ移動と判定
             notes.forEach(n => {
                 if (!n.active) return;
                 const progress = 1 - ((n.targetTime - currentTime) / SCROLL_TIME);
                 n.el.style.top = (progress * TARGET_Y) + "px";
+                
+                // 見逃し判定
                 if (currentTime > n.targetTime + 0.3) {
-                    n.active = false; n.el.style.opacity = 0;
-                    if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
+                    n.active = false; 
+                    n.el.style.opacity = 0;
+                    if (combo > 0) { 
+                        combo = 0; 
+                        showJudge("MISS...", "miss"); 
+                        updateUI(); 
+                    }
                     setTimeout(() => n.el.remove(), 200);
                 }
             });
@@ -159,21 +186,50 @@
         function handleInput(track, event) {
             if (event) event.preventDefault();
             if (!isPlaying) return;
+            
             playHitSound();
+            
             const currentTime = bgm.currentTime;
+            // 最も近いアクティブなノーツを探す
             const target = notes.filter(n => n.track === track && n.active)
-                             .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
+                               .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
+            
             if (!target) return;
+
             const diff = Math.abs(currentTime - target.targetTime);
-            if (diff < 0.25) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
-            else if (diff < 0.45) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
+            if (diff < 0.2) { 
+                score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); 
+            } else if (diff < 0.4) { 
+                score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); 
+            }
             updateUI();
         }
 
-        function removeNote(n) { n.active = false; n.el.remove(); }
-        function showJudge(txt, cls) { judgeEl.innerText = txt; judgeEl.className = cls; judgeEl.style.animation = 'none'; judgeEl.offsetHeight; judgeEl.style.animation = null; }
-        function updateUI() { scoreEl.innerText = score; comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; }
-        function endGame() { isPlaying = false; clearInterval(gameTimer); bgm.pause(); notes.forEach(n => n.el.remove()); startBtn.style.display = 'block'; startBtn.innerText = "リベンジ！"; }
+        function removeNote(n) { 
+            n.active = false; 
+            if(n.el) n.el.remove(); 
+        }
+
+        function showJudge(txt, cls) { 
+            judgeEl.innerText = txt; 
+            judgeEl.className = cls; 
+            judgeEl.style.animation = 'none'; 
+            judgeEl.offsetHeight; 
+            judgeEl.style.animation = null; 
+        }
+
+        function updateUI() { 
+            scoreEl.innerText = score; 
+            comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; 
+        }
+
+        function endGame() { 
+            isPlaying = false; 
+            clearInterval(gameTimer); 
+            bgm.pause(); 
+            startBtn.style.display = 'block'; 
+            startBtn.innerText = "リベンジ！"; 
+        }
     </script>
 </body>
 </html>
