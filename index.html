@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 最終修行完了版</title>
+    <title>STNV BEAT - 鬼の1発勝負版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -39,7 +39,7 @@
             background: #222; border: 2px solid #fff; border-radius: 15px;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 0 #555; font-size: 24px; cursor: pointer;
-            touch-action: none; /* スマホのマルチタッチに必須 */
+            touch-action: none; 
         }
         .btn:active { transform: translateY(2px); box-shadow: 0 0 0 #555; background: #444 !important; }
         #btn_0 { border-color: #ff00ff; color: #ff00ff; }
@@ -52,6 +52,7 @@
         #judgment_text {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
             font-size: 28px; font-weight: bold; text-shadow: 2px 2px #000; z-index: 20; opacity: 0; pointer-events: none;
+            text-align: center;
         }
         
         .cool { color: #0ff; animation: pop 0.2s ease-out; opacity: 1 !important; }
@@ -78,7 +79,7 @@
         <div class="btn" id="btn_3">➡️</div>
     </div>
     
-    <button id="start_btn" onclick="startGame()">👹 タップして開始！</button>
+    <button id="start_btn" onclick="startGame()">👹 覚悟を決めて開始！</button>
 
     <script>
         // --- ⚙️ 設定 ---
@@ -102,31 +103,27 @@
         const judgeEl = document.getElementById('judgment_text');
         const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
-        const bambooImgSrc = document.getElementById('preload_img').src; // プリロードした画像を直接使う
+        const bambooImgSrc = document.getElementById('preload_img').src;
 
         // 効果音ロード
         fetch(SE_URL).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buf => seBuffer = buf).catch(e => console.log("SE Load Error"));
 
-        // ★マルチタッチ完全対応のボタン入力処理
+        // マルチタッチ対応＆空打ち防止
         for (let i = 0; i < 4; i++) {
             const btn = document.getElementById(`btn_${i}`);
             
-            // スマホのタッチ用（2本指同時押し対応）
+            // 2本指同時押し対応（1つのボタンにつき1回の処理に絞る）
             btn.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // 画面のズームやスクロールを完全に防ぐ
-                for (let t = 0; t < e.changedTouches.length; t++) {
-                    handleInput(i);
-                }
+                e.preventDefault(); 
+                handleInput(i);
             }, { passive: false });
 
-            // PCのクリック用
             btn.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return; 
                 e.preventDefault();
                 handleInput(i);
             });
             
-            // 長押しメニューを出さない
             btn.addEventListener('contextmenu', e => e.preventDefault());
         }
 
@@ -137,6 +134,7 @@
             
             startBtn.style.display = 'none';
             judgeEl.innerText = "";
+            judgeEl.style.opacity = 0; // 前回の結果を消す
             
             isPlaying = true; 
             score = 0; 
@@ -152,7 +150,7 @@
             
             gameTimer = setInterval(update, 1000 / 60);
             
-            // 3分(180秒)で強制終了させる安全装置
+            // 3分(180秒)で強制終了
             setTimeout(() => { if(isPlaying) endGame(); }, 180000);
         }
 
@@ -167,7 +165,7 @@
 
         function spawn(track, targetTime) {
             const el = document.createElement('img');
-            el.src = bambooImgSrc; // プリロード済みの画像を適用
+            el.src = bambooImgSrc; 
             el.className = `note track-${track}`;
             el.style.top = "-60px"; 
             gameArea.appendChild(el);
@@ -178,7 +176,7 @@
             if (!isPlaying) return;
             let currentTime = bgm.currentTime;
             
-            // ★リベンジバグ対策: 音楽の時間がリセットされるまでのコンマ数秒を無視する
+            // リベンジ時の時間ワープ対策
             if (currentTime > 10 && nextNoteTime < 10) return;
             
             if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
@@ -200,14 +198,17 @@
                 n.y = progress * targetY; 
                 n.el.style.top = n.y + "px";
                 
+                // 見逃し処理（ペナルティ）
                 if (currentTime > n.targetTime + 0.3) {
                     n.active = false; n.el.style.opacity = 0;
-                    if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
+                    combo = 0;
+                    score = Math.max(0, score - 50); // 減点（0未満にはならない）
+                    showJudge("MISS", "miss"); 
+                    updateUI();
                     setTimeout(() => n.el.remove(), 200);
                 }
             });
             
-            // 曲が終わったらリザルトへ
             if (currentTime >= bgm.duration - 0.5 && notes.length === 0) {
                 endGame();
             }
@@ -222,36 +223,66 @@
             const target = notes.filter(n => n.track === track && n.active)
                              .sort((a,b) => Math.abs(a.targetTime - currentTime) - Math.abs(b.targetTime - currentTime))[0];
                              
-            if (!target) return;
+            // ★空打ちペナルティ（顔がいないのに叩いた場合）
+            if (!target) {
+                combo = 0;
+                score = Math.max(0, score - 50); // 50点減点
+                showJudge("MISS", "miss");
+                updateUI();
+                return;
+            }
             
             const diff = Math.abs(currentTime - target.targetTime);
             
-            // ★超シビアな判定に修正（ガチ勢向け）
+            // ★超シビア判定 ＋ コンボ加点 ＋ ミス減点
             if (diff < 0.08) { 
-                score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); 
+                combo++;
+                score += 100 + (combo * 10); // COOL: 基本100点 + コンボボーナス
+                showJudge("COOL!!", "cool"); 
+                removeNote(target); 
             } else if (diff < 0.15) { 
-                score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); 
+                combo++;
+                score += 50 + (combo * 5);   // GOOD: 基本50点 + コンボボーナス
+                showJudge("GOOD", "good"); 
+                removeNote(target); 
             } else if (diff < 0.25) { 
-                score += 10; combo = 0; showJudge("BAD", "bad"); removeNote(target); 
+                combo = 0;
+                score = Math.max(0, score - 30); // BAD: 30点減点
+                showJudge("BAD", "bad"); 
+                removeNote(target); 
+            } else {
+                combo = 0;
+                score = Math.max(0, score - 50); // MISS: 早すぎた場合も50点減点
+                showJudge("MISS", "miss"); 
+                removeNote(target);
             }
             updateUI();
         }
 
         function removeNote(n) { n.active = false; n.el.remove(); }
-        function showJudge(txt, cls) { judgeEl.innerText = txt; judgeEl.className = cls; judgeEl.style.animation = 'none'; judgeEl.offsetHeight; judgeEl.style.animation = null; }
-        function updateUI() { scoreEl.innerText = score; comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; }
+        function showJudge(txt, cls) { 
+            judgeEl.innerText = txt; 
+            judgeEl.className = cls; 
+            judgeEl.style.animation = 'none'; 
+            judgeEl.offsetHeight; 
+            judgeEl.style.animation = null; 
+        }
+        function updateUI() { 
+            scoreEl.innerText = score; 
+            comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; 
+        }
         
         function endGame() { 
             isPlaying = false; 
             clearInterval(gameTimer); 
             bgm.pause(); 
-            bgm.currentTime = 0; // ここでも時間をしっかりリセット
             notes.forEach(n => n.el.remove()); 
             notes = [];
-            startBtn.style.display = 'block'; 
-            startBtn.innerText = "リベンジ！"; 
-            judgeEl.innerText = "FINISH!"; 
+            
+            // ★一発勝負！リベンジボタンは表示しない
+            judgeEl.innerHTML = `FINISH!<br><span style="font-size: 20px;">最終スコア: ${score}</span>`; 
             judgeEl.className = "cool";
+            judgeEl.style.opacity = 1; // ずっと表示させておく
         }
     </script>
 </body>
