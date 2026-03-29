@@ -79,10 +79,7 @@
 
     <script>
         // --- ⚙️ 設定 ---
-        const TARGET_Y = 250;
         const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
-        
-        // ★正しいファイル名のURLに修正しました（rawリンク）
         const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/main/STNVEAT%EF%BC%91.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
         
@@ -128,7 +125,7 @@
             updateUI();
             
             nextNoteTime = SCROLL_TIME - OFFSET;
-            fallbackStartTime = performance.now(); // 時計スタート
+            fallbackStartTime = performance.now(); 
             
             bgm.currentTime = 0;
             bgm.play().catch(e => console.log("Audio Error:", e));
@@ -136,7 +133,6 @@
             gameTimer = setInterval(update, 1000 / 60);
             bgm.onended = endGame;
 
-            // 曲が終わらなくても3分(180秒)で終了させる安全装置
             setTimeout(() => { if(isPlaying) endGame(); }, 180000);
         }
 
@@ -159,7 +155,6 @@
         function update() {
             if (!isPlaying) return;
             
-            // 音楽が鳴らなくても時計で絶対にゲームが進む
             let currentTime = bgm.currentTime > 0 ? bgm.currentTime : (performance.now() - fallbackStartTime) / 1000;
             
             if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
@@ -175,7 +170,9 @@
             notes.forEach(n => {
                 if (!n.active) return;
                 const progress = 1 - ((n.targetTime - currentTime) / SCROLL_TIME);
-                n.y = progress * TARGET_Y;
+                
+                // ★固定の250pxをやめて、画面サイズに合わせて一番下まで落ちるように修正！
+                n.y = progress * (gameArea.clientHeight - 80); 
                 n.el.style.top = n.y + "px";
                 
                 if (currentTime > n.targetTime + 0.3) {
