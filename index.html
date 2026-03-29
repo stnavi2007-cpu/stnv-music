@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV BEAT - 最終完全版</title>
+    <title>STNV BEAT - 最終修行完了版</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         
@@ -39,6 +39,7 @@
             background: #222; border: 2px solid #fff; border-radius: 15px;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 0 #555; font-size: 24px; cursor: pointer;
+            touch-action: none; /* スマホのマルチタッチに必須 */
         }
         .btn:active { transform: translateY(2px); box-shadow: 0 0 0 #555; background: #444 !important; }
         #btn_0 { border-color: #ff00ff; color: #ff00ff; }
@@ -53,10 +54,10 @@
             font-size: 28px; font-weight: bold; text-shadow: 2px 2px #000; z-index: 20; opacity: 0; pointer-events: none;
         }
         
-        .cool { color: #0ff; animation: pop 0.3s ease-out; opacity: 1 !important; }
-        .good { color: #0f0; animation: pop 0.3s ease-out; opacity: 1 !important; }
-        .bad { color: #f00; animation: pop 0.3s ease-out; opacity: 1 !important; }
-        .miss { color: #888; animation: pop 0.3s ease-out; opacity: 1 !important; }
+        .cool { color: #0ff; animation: pop 0.2s ease-out; opacity: 1 !important; }
+        .good { color: #0f0; animation: pop 0.2s ease-out; opacity: 1 !important; }
+        .bad { color: #f00; animation: pop 0.2s ease-out; opacity: 1 !important; }
+        .miss { color: #888; animation: pop 0.2s ease-out; opacity: 1 !important; }
         @keyframes pop { 0% { transform: translate(-50%,-40%) scale(0.8); } 50% { transform: translate(-50%,-50%) scale(1.2); } 100% { transform: translate(-50%,-50%) scale(1); } }
         
         #start_btn { padding: 12px 24px; font-size: 16px; background: #f00; color: #fff; border: 3px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; margin-top: 10px; }
@@ -64,22 +65,23 @@
 </head>
 <body>
 
+    <img id="preload_img" src="https://i.ibb.co/TDsqJLMY/image.png" style="display:none; position:absolute; width:1px; height:1px;">
+
     <h1>👿 vs 魔王バンブー 👿</h1>
     <div id="ui_board"><div>SCORE: <span id="score">0</span></div><div id="combo"></div></div>
     <div id="game_area"><div id="judgment_text"></div><div id="target_line"></div></div>
     
     <div id="controls">
-        <div class="btn" id="btn_0" ontouchstart="handleInput(0, event)" onmousedown="handleInput(0, event)">⬅️</div>
-        <div class="btn" id="btn_1" ontouchstart="handleInput(1, event)" onmousedown="handleInput(1, event)">⬇️</div>
-        <div class="btn" id="btn_2" ontouchstart="handleInput(2, event)" onmousedown="handleInput(2, event)">⬆️</div>
-        <div class="btn" id="btn_3" ontouchstart="handleInput(3, event)" onmousedown="handleInput(3, event)">➡️</div>
+        <div class="btn" id="btn_0">⬅️</div>
+        <div class="btn" id="btn_1">⬇️</div>
+        <div class="btn" id="btn_2">⬆️</div>
+        <div class="btn" id="btn_3">➡️</div>
     </div>
     
     <button id="start_btn" onclick="startGame()">👹 タップして開始！</button>
 
     <script>
         // --- ⚙️ 設定 ---
-        const BAMBOO_IMG = "https://i.ibb.co/TDsqJLMY/image.png";
         const BGM_URL = "https://github.com/stnavi2007-cpu/stnv-music/raw/main/STNVEAT%EF%BC%91.mp3";
         const SE_URL = "https://taira-komori.jpn.org/sound_os/percussion01/taiko01.mp3";
         
@@ -100,13 +102,33 @@
         const judgeEl = document.getElementById('judgment_text');
         const startBtn = document.getElementById('start_btn');
         const gameArea = document.getElementById('game_area');
+        const bambooImgSrc = document.getElementById('preload_img').src; // プリロードした画像を直接使う
 
         // 効果音ロード
-        fetch(SE_URL)
-            .then(res => res.arrayBuffer())
-            .then(data => audioCtx.decodeAudioData(data))
-            .then(buf => seBuffer = buf)
-            .catch(e => console.log("SE Load Error"));
+        fetch(SE_URL).then(res => res.arrayBuffer()).then(data => audioCtx.decodeAudioData(data)).then(buf => seBuffer = buf).catch(e => console.log("SE Load Error"));
+
+        // ★マルチタッチ完全対応のボタン入力処理
+        for (let i = 0; i < 4; i++) {
+            const btn = document.getElementById(`btn_${i}`);
+            
+            // スマホのタッチ用（2本指同時押し対応）
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // 画面のズームやスクロールを完全に防ぐ
+                for (let t = 0; t < e.changedTouches.length; t++) {
+                    handleInput(i);
+                }
+            }, { passive: false });
+
+            // PCのクリック用
+            btn.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return; 
+                e.preventDefault();
+                handleInput(i);
+            });
+            
+            // 長押しメニューを出さない
+            btn.addEventListener('contextmenu', e => e.preventDefault());
+        }
 
         function startGame() {
             if (isPlaying) return;
@@ -129,8 +151,8 @@
             bgm.play().catch(e => console.log("Audio Error:", e));
             
             gameTimer = setInterval(update, 1000 / 60);
-            bgm.onended = endGame;
-
+            
+            // 3分(180秒)で強制終了させる安全装置
             setTimeout(() => { if(isPlaying) endGame(); }, 180000);
         }
 
@@ -145,16 +167,19 @@
 
         function spawn(track, targetTime) {
             const el = document.createElement('img');
-            el.src = BAMBOO_IMG; el.className = `note track-${track}`;
-            el.style.top = "-60px"; gameArea.appendChild(el);
+            el.src = bambooImgSrc; // プリロード済みの画像を適用
+            el.className = `note track-${track}`;
+            el.style.top = "-60px"; 
+            gameArea.appendChild(el);
             notes.push({ el, track, targetTime, active: true });
         }
 
         function update() {
             if (!isPlaying) return;
-            
-            // ★絶対に時間がワープしないように、音楽の純粋な再生時間だけを使います
             let currentTime = bgm.currentTime;
+            
+            // ★リベンジバグ対策: 音楽の時間がリセットされるまでのコンマ数秒を無視する
+            if (currentTime > 10 && nextNoteTime < 10) return;
             
             if (currentTime + SCROLL_TIME >= nextNoteTime + OFFSET) {
                 if (Math.random() < 0.05) { 
@@ -166,7 +191,6 @@
                 nextNoteTime += NOTE_INTERVAL;
             }
 
-            // ★ターゲットライン（点線）の中心にピッタリ落ちる高さを計算
             const targetY = gameArea.clientHeight - 90;
 
             notes.forEach(n => {
@@ -176,17 +200,20 @@
                 n.y = progress * targetY; 
                 n.el.style.top = n.y + "px";
                 
-                // ラインを完全に通り過ぎてから「見逃し（MISS）」で消える
                 if (currentTime > n.targetTime + 0.3) {
                     n.active = false; n.el.style.opacity = 0;
                     if (combo > 0) { combo = 0; showJudge("MISS...", "miss"); updateUI(); }
                     setTimeout(() => n.el.remove(), 200);
                 }
             });
+            
+            // 曲が終わったらリザルトへ
+            if (currentTime >= bgm.duration - 0.5 && notes.length === 0) {
+                endGame();
+            }
         }
 
-        function handleInput(track, event) {
-            if (event) event.preventDefault(); 
+        function handleInput(track) {
             if (!isPlaying) return;
             
             playHitSound();
@@ -199,10 +226,14 @@
             
             const diff = Math.abs(currentTime - target.targetTime);
             
-            // ★判定を「ラインのすぐ近く」に絞りました。これで連打しても空中で消えません！
-            if (diff < 0.15) { score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); }
-            else if (diff < 0.25) { score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); }
-            else if (diff < 0.35) { score += 10; combo = 0; showJudge("BAD", "bad"); removeNote(target); }
+            // ★超シビアな判定に修正（ガチ勢向け）
+            if (diff < 0.08) { 
+                score += 100; combo++; showJudge("COOL!!", "cool"); removeNote(target); 
+            } else if (diff < 0.15) { 
+                score += 50; combo++; showJudge("GOOD", "good"); removeNote(target); 
+            } else if (diff < 0.25) { 
+                score += 10; combo = 0; showJudge("BAD", "bad"); removeNote(target); 
+            }
             updateUI();
         }
 
@@ -211,10 +242,16 @@
         function updateUI() { scoreEl.innerText = score; comboEl.innerText = combo > 0 ? combo + " COMBO!" : ""; }
         
         function endGame() { 
-            isPlaying = false; clearInterval(gameTimer); bgm.pause(); 
+            isPlaying = false; 
+            clearInterval(gameTimer); 
+            bgm.pause(); 
+            bgm.currentTime = 0; // ここでも時間をしっかりリセット
             notes.forEach(n => n.el.remove()); 
-            startBtn.style.display = 'block'; startBtn.innerText = "リベンジ！"; 
-            judgeEl.innerText = "FINISH!"; judgeEl.className = "cool";
+            notes = [];
+            startBtn.style.display = 'block'; 
+            startBtn.innerText = "リベンジ！"; 
+            judgeEl.innerText = "FINISH!"; 
+            judgeEl.className = "cool";
         }
     </script>
 </body>
