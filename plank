@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>STNV AI PLANK</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
+        
+        #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        video { display: none; }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .status-box { background: rgba(0,0,0,0.8); border: 2px solid #0ff; padding: 10px; border-radius: 10px; min-width: 120px; box-shadow: 0 0 10px #0ff; }
+        #timer { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; }
+        
+        #msg_area { font-size: 28px; font-weight: bold; padding: 20px; border-radius: 15px; margin-top: 40px; text-shadow: 2px 2px #000; transition: 0.3s; }
+        .msg-waiting { color: #fff; background: rgba(100,100,100,0.7); border: 3px dashed #fff; }
+        .msg-countdown { color: #ff0; background: rgba(255,255,0,0.4); border: 3px solid #ff0; font-size: 50px !important; }
+        .msg-ok { color: #0f0; border: 3px solid #0f0; background: rgba(0,255,0,0.2); }
+        .msg-ng { color: #f00; border: 3px solid #f00; background: rgba(255,0,0,0.6); animation: flash 0.3s infinite; }
+        
+        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        #ng_countdown { font-size: 50px; color: #f00; font-weight: bold; text-shadow: 0 0 20px #000; }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
+        .btn { padding: 15px 30px; background: #f00; color: #fff; border: 2px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; font-size: 18px; cursor: pointer; margin-top: 15px; width: 85%; max-width: 300px; box-shadow: 0 4px #900; transition: 0.1s; pointer-events: auto; }
+        .btn:active { transform: translateY(4px); box-shadow: 0 0 #900; }
+        .btn-exit { background: #333; color: #fff; border: 2px solid #777; box-shadow: 0 4px #111; }
+        input { width: 80%; max-width: 300px; padding: 12px; margin: 5px 0; background: #222; color: #fff; border: 1px solid #0ff; text-align: center; font-family: 'DotGothic16'; border-radius: 5px; font-size: 16px; pointer-events: auto; }
+        
+        #download_link { background: #0ff; color: #000; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; margin-top: 20px; pointer-events: auto; display: none; }
+    </style>
+</head>
+<body>
+
+<div id="start_screen" class="overlay">
+    <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AI PLANK QUEST 🔥</h1>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">己の肉体で魔王をねじ伏せろ！</p>
+    <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px;">
+        ⚠️ カメラの許可を求められたら「許可」を押せ！<br>
+        ⚠️ 服はインして、横向きで全身を映せ！
+    </div>
+    <input type="text" id="play_id" placeholder="ダンサーID">
+    <input type="password" id="play_pass" placeholder="パスワード">
+    <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ START</button>
+</div>
+
+<div id="video_container">
+    <video id="input_video" autoplay playsinline muted></video>
+    <canvas id="output_canvas"></canvas>
+    
+    <div class="ui-layer">
+        <div class="header">
+            <div class="status-box">
+                <div style="font-size:12px;">HOLDING TIME</div>
+                <div id="timer">0.00</div>
+            </div>
+            <div class="status-box">
+                <div id="ng_label" style="font-size:12px; color:#f00; display:none;">NG: LIMIT 5s</div>
+                <div id="ng_countdown"></div>
+            </div>
+        </div>
+        <div id="msg_area" class="msg-waiting">AI 起動中...</div>
+        <div style="background:rgba(0,0,0,0.6); padding:10px; border-radius:5px; font-size:14px;">
+            ⚠️ 服はインして、真横から全身が映るように置いてくれ！
+        </div>
+    </div>
+</div>
+
+<div id="result_overlay" class="overlay" style="display:none;">
+    <h1 style="color:#ffd700; text-shadow: 0 0 10px #f00;">MISSION COMPLETE</h1>
+    <div style="font-size:24px; margin-bottom:10px;">耐えた時間：<span id="final_score" style="color:#0f0; font-size:40px;">0</span> 秒</div>
+    <div id="save_status" style="color:#0ff; margin-bottom:20px;">データ送信中...</div>
+    <p style="font-size:14px; color:#ccc;">👇 動画を保存して提出せよ！</p>
+    <a id="download_link">🎥 動画をダウンロード</a>
+    <button class="btn btn-exit" onclick="location.reload()">もう一度挑戦</button>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
+
+let pose, camera, videoElement, canvasElement, canvasCtx;
+let state = "SETUP"; 
+let holdTime = 0;
+let ngTimeStart = null;
+let countdownVal = 3;
+let countdownTimer = null;
+let mediaRecorder, recordedChunks = [];
+let voiceLocked = false;
+let playId = "";
+let playPass = "";
+
+function speak(text) {
+    if (voiceLocked) return;
+    const uttr = new SpeechSynthesisUtterance(text);
+    uttr.lang = "ja-JP";
+    uttr.rate = 1.2;
+    window.speechSynthesis.speak(uttr);
+}
+
+function loginAndStart() {
+    playId = document.getElementById('play_id').value;
+    playPass = document.getElementById('play_pass').value;
+    
+    if(!playId || !playPass) {
+        alert("IDとパスワードを入れてくれ！");
+        return;
+    }
+
+    const unlockUttr = new SpeechSynthesisUtterance("");
+    unlockUttr.volume = 0;
+    window.speechSynthesis.speak(unlockUttr);
+
+    document.getElementById('start_screen').style.display = 'none';
+    document.getElementById('video_container').style.display = 'block';
+
+    initAI(); 
+}
+
+function initAI() {
+    videoElement = document.getElementById('input_video');
+    canvasElement = document.getElementById('output_canvas');
+    canvasCtx = canvasElement.getContext('2d');
+
+    pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.onResults(onResults);
+
+    camera = new Camera(videoElement, {
+        onFrame: async () => { await pose.send({image: videoElement}); },
+        width: 1280, height: 720
+    });
+    
+    camera.start().catch(err => {
+        alert("カメラの起動に失敗しました。ブラウザの再読み込みをして、カメラを許可してください！");
+    });
+}
+
+function onResults(results) {
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    canvasCtx.translate(canvasElement.width, 0);
+    canvasCtx.scale(-1, 1);
+    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    
+    if (results.poseLandmarks) {
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
+        processGame(results.poseLandmarks);
+    }
+    canvasCtx.restore();
+}
+
+function processGame(landmarks) {
+    const shoulder = landmarks[11];
+    const hip = landmarks[23];
+    const ankle = landmarks[27];
+    
+    const midY = (shoulder.y + ankle.y) / 2;
+    const diff = Math.abs(hip.y - midY);
+    const isGoodPose = diff < 0.08; 
+
+    const msg = document.getElementById('msg_area');
+
+    if (state === "SETUP") {
+        msg.innerText = "正しい姿勢で静止せよ！";
+        msg.className = "msg-waiting";
+        if (isGoodPose) startCountdown();
+    } 
+    else if (state === "COUNTDOWN") {
+        if (!isGoodPose) cancelCountdown();
+    }
+    else if (state === "BATTLE") {
+        updateBattle(isGoodPose);
+    }
+}
+
+function startCountdown() {
+    state = "COUNTDOWN";
+    countdownVal = 3;
+    const msg = document.getElementById('msg_area');
+    msg.className = "msg-countdown";
+    speak("姿勢OK。開始します。3");
+    
+    countdownTimer = setInterval(() => {
+        countdownVal--;
+        if (countdownVal > 0) {
+            msg.innerText = countdownVal;
+            speak(countdownVal);
+        } else {
+            clearInterval(countdownTimer);
+            beginBattle();
+        }
+    }, 1000);
+}
+
+function cancelCountdown() {
+    clearInterval(countdownTimer);
+    state = "SETUP";
+    speak("姿勢が崩れました");
+}
+
+function beginBattle() {
+    state = "BATTLE";
+    holdTime = 0;
+    speak("スタート！！");
+    document.getElementById('msg_area').innerText = "KEEP IT!!";
+    
+    try {
+        const stream = canvasElement.captureStream(30);
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = saveVideo;
+        mediaRecorder.start();
+    } catch(err) {}
+}
+
+function updateBattle(isGoodPose) {
+    const msg = document.getElementById('msg_area');
+    const ngLabel = document.getElementById('ng_label');
+    const ngCount = document.getElementById('ng_countdown');
+
+    if (isGoodPose) {
+        if (ngTimeStart) {
+            ngTimeStart = null;
+            ngLabel.style.display = "none";
+            ngCount.innerText = "";
+            speak("復帰。");
+        }
+        holdTime += 0.033;
+        document.getElementById('timer').innerText = holdTime.toFixed(2);
+        msg.innerText = "GOOD POSE!! 🔥";
+        msg.className = "msg-ok";
+    } else {
+        msg.innerText = "腰を落とすな！！ 🚨";
+        msg.className = "msg-ng";
+        if (!ngTimeStart) {
+            ngTimeStart = Date.now();
+            speak("姿勢を戻せ！！");
+        }
+        
+        let elapsed = (Date.now() - ngTimeStart) / 1000;
+        let remain = (5.0 - elapsed).toFixed(1);
+        ngLabel.style.display = "block";
+        ngCount.innerText = remain;
+
+        if (remain <= 0) finishGame();
+    }
+}
+
+function finishGame() {
+    if (state === "FINISHED") return;
+    state = "FINISHED";
+    speak("終了！お疲れ様。");
+    
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+    
+    document.getElementById('result_overlay').style.display = "flex";
+    const finalScore = Math.floor(holdTime);
+    document.getElementById('final_score').innerText = finalScore;
+    
+    // 🌟 外部から社長のGASへスコアを直接送信！
+    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                document.getElementById('save_status').innerText = "通信完了！ポイント付与！";
+            } else {
+                document.getElementById('save_status').innerText = "エラー: " + data.message;
+            }
+        })
+        .catch(err => {
+            document.getElementById('save_status').innerText = "通信エラー！";
+        });
+}
+
+function saveVideo() {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const link = document.getElementById('download_link');
+    link.href = url;
+    link.download = `STNV_PLANK_${new Date().getTime()}.webm`;
+    link.style.display = "inline-block";
+}
+</script>
+</body>
+</html>
