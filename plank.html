@@ -26,6 +26,8 @@
         .msg-ok { color: #0f0; border: 3px solid #0f0; background: rgba(0,255,0,0.2); }
         .msg-ng { color: #f00; border: 3px solid #f00; background: rgba(255,0,0,0.6); animation: flash 0.3s infinite; }
         
+        #debug_msg { font-size: 14px; color: #ff0; margin-top: 10px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; }
+
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
         #ng_countdown { font-size: 50px; color: #f00; font-weight: bold; text-shadow: 0 0 20px #000; }
@@ -69,7 +71,9 @@
             </div>
         </div>
         <div id="msg_area" class="msg-waiting">AI 起動中...</div>
-        <div style="background:rgba(0,0,0,0.6); padding:10px; border-radius:5px; font-size:14px;">
+        <div id="debug_msg">AI分析中...</div>
+        
+        <div style="background:rgba(0,0,0,0.6); padding:10px; border-radius:5px; font-size:14px; margin-top:auto;">
             ⚠️ 服はインして、真横から全身が映るように置いてくれ！
         </div>
     </div>
@@ -98,11 +102,18 @@ let voiceLocked = false;
 let playId = "";
 let playPass = "";
 
+// ★声のスパム対策用変数
+let lastWarnTime = 0; 
+
 function speak(text) {
     if (voiceLocked) return;
+    // ★前の言葉が話し終わってなくても一旦キャンセル（声の渋滞を防ぐ）
+    window.speechSynthesis.cancel(); 
+    
     const uttr = new SpeechSynthesisUtterance(text);
     uttr.lang = "ja-JP";
     uttr.rate = 1.2;
+    uttr.volume = 0.4; // ★ボリュームをダウン（うるさすぎないように）
     window.speechSynthesis.speak(uttr);
 }
 
@@ -146,6 +157,13 @@ function initAI() {
     });
 }
 
+function calculateAngle(a, b, c) {
+    let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let angle = Math.abs(radians * 180.0 / Math.PI);
+    if (angle > 180.0) angle = 360.0 - angle;
+    return angle;
+}
+
 function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
@@ -163,13 +181,25 @@ function onResults(results) {
 }
 
 function processGame(landmarks) {
-    const shoulder = landmarks[11];
-    const hip = landmarks[23];
-    const ankle = landmarks[27];
+    const shoulder = { x: (landmarks[11].x + landmarks[12].x)/2, y: (landmarks[11].y + landmarks[12].y)/2 };
+    const hip = { x: (landmarks[23].x + landmarks[24].x)/2, y: (landmarks[23].y + landmarks[24].y)/2 };
+    const knee = { x: (landmarks[25].x + landmarks[26].x)/2, y: (landmarks[25].y + landmarks[26].y)/2 };
+    const ankle = { x: (landmarks[27].x + landmarks[28].x)/2, y: (landmarks[27].y + landmarks[28].y)/2 };
     
-    const midY = (shoulder.y + ankle.y) / 2;
-    const diff = Math.abs(hip.y - midY);
-    const isGoodPose = diff < 0.08; 
+    const hipAngle = calculateAngle(shoulder, hip, knee);
+    const kneeAngle = calculateAngle(hip, knee, ankle);
+    const isKneeFloating = knee.y < ankle.y + 0.05; 
+
+    const isGoodPose = (hipAngle > 155 && kneeAngle > 155 && isKneeFloating);
+
+    const debugMsg = document.getElementById('debug_msg');
+    if (!isGoodPose) {
+        if (hipAngle <= 155) debugMsg.innerText = "❌ 腰が曲がっている！(お尻が出てる/落ちてる)";
+        else if (kneeAngle <= 155) debugMsg.innerText = "❌ 膝が曲がっている！(膝を伸ばせ！)";
+        else if (!isKneeFloating) debugMsg.innerText = "❌ 膝が床についている！";
+    } else {
+        debugMsg.innerText = "✅ 完璧なフォーム！";
+    }
 
     const msg = document.getElementById('msg_area');
 
@@ -208,7 +238,7 @@ function startCountdown() {
 function cancelCountdown() {
     clearInterval(countdownTimer);
     state = "SETUP";
-    speak("姿勢が崩れました");
+    speak("崩れました。");
 }
 
 function beginBattle() {
@@ -237,7 +267,7 @@ function updateBattle(isGoodPose) {
             ngTimeStart = null;
             ngLabel.style.display = "none";
             ngCount.innerText = "";
-            speak("復帰。");
+            // ★「復帰」の音声はうるさいので削除！画面でわかればOK
         }
         holdTime += 0.033;
         document.getElementById('timer').innerText = holdTime.toFixed(2);
@@ -248,7 +278,12 @@ function updateBattle(isGoodPose) {
         msg.className = "msg-ng";
         if (!ngTimeStart) {
             ngTimeStart = Date.now();
-            speak("姿勢を戻せ！！");
+            
+            // ★スパム防止：前回怒ってから3秒経過してないと喋らない
+            if (Date.now() - lastWarnTime > 3000) {
+                speak("姿勢を戻せ！");
+                lastWarnTime = Date.now();
+            }
         }
         
         let elapsed = (Date.now() - ngTimeStart) / 1000;
@@ -263,7 +298,7 @@ function updateBattle(isGoodPose) {
 function finishGame() {
     if (state === "FINISHED") return;
     state = "FINISHED";
-    speak("終了！お疲れ様。");
+    speak("終了！");
     
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
@@ -271,7 +306,6 @@ function finishGame() {
     const finalScore = Math.floor(holdTime);
     document.getElementById('final_score').innerText = finalScore;
     
-    // 🌟 外部から社長のGASへスコアを直接送信！
     fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
         .then(res => res.json())
         .then(data => {
