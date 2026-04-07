@@ -25,23 +25,23 @@
             left: 0; 
             width: 100%; 
             height: 100%; 
-            /* 🌟 ズーム(クロップ)を一ミリもさせない設定 */
+            /* 広角維持（クロップさせない） */
             object-fit: contain; 
-            /* 🌟 画面を水平反転（完全な鏡表示） */
+            /* 画面を水平反転（完全な鏡表示） */
             transform: scaleX(-1); 
         }
         
         video { display: none; }
         
-        /* 🌟 殺人現場の人型点線ガイド（下部に配置） */
+        /* 人型点線ガイド（下部に小さく配置してジャンプを誘発） */
         #body_guide {
             position: absolute;
-            bottom: 5%;
+            bottom: 2%;
             left: 50%;
             transform: translateX(-50%);
-            width: 50%;
-            max-height: 60%;
-            opacity: 0.6;
+            width: 40%;
+            height: 40%;
+            opacity: 0.5;
             pointer-events: none;
             z-index: 5;
             display: none;
@@ -95,12 +95,6 @@
 <div id="start_screen" class="overlay">
     <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR BATTLE QUEST 🔥</h1>
     <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳(全身)で魔王をぶっ叩け！</p>
-    <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
-        【ルール】<br>
-        ① スマホを壁に立てかけろ！<br>
-        ② 画面の下にある点線に体を合わせろ！<br>
-        ③ 現れるターゲットを直接「手」で殴れ！
-    </div>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
     <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ BATTLE開始</button>
@@ -110,7 +104,7 @@
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
     
-    <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Cpath fill='none' stroke='%230ff' stroke-width='3' stroke-dasharray='6,6' stroke-linecap='round' stroke-linejoin='round' d='M 50 15 C 65 15, 65 40, 50 45 C 70 45, 85 60, 90 90 C 92 105, 80 105, 75 90 C 70 70, 65 70, 65 100 C 65 135, 75 185, 75 195 C 75 200, 60 200, 60 195 C 60 165, 55 125, 50 125 C 45 125, 40 165, 40 195 C 40 200, 25 200, 25 195 C 25 185, 35 135, 35 100 C 35 70, 30 70, 25 90 C 20 105, 8 105, 10 90 C 15 60, 30 45, 50 45 C 35 40, 35 15, 50 15 Z' /%3E%3C/svg%3E">
+    <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Ccircle cx='50' cy='25' r='15' fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' /%3E%3Cpath fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' stroke-linejoin='round' d='M 35 40 L 65 40 L 85 90 L 75 100 L 65 60 L 65 110 L 70 190 L 55 190 L 50 120 L 45 190 L 30 190 L 35 110 L 35 60 L 25 100 L 15 90 Z' /%3E%3C/svg%3E">
 
     <div class="ui-layer">
         <div class="header">
@@ -123,7 +117,7 @@
                 <div id="time_display">60</div>
             </div>
         </div>
-        </div>
+    </div>
 </div>
 
 <div id="result_overlay" class="overlay" style="display:none;">
@@ -138,21 +132,20 @@
 </div>
 
 <script>
-// ★GASへの送信URL
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
 let gameState = "SETUP"; 
 let score = 0;
-let timeLeft = 60; // 🌟 60秒
+let timeLeft = 60; // 60秒
 let timerInterval;
 
 let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// 🌟 小さめのターゲット設定
-let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
+// ターゲットサイズを小さく設定（0.035 = 画面幅の3.5%）
+let target = { x: 0.5, y: 0.5, radius: 0.035, active: false };
 let playId = "", playPass = "";
 
 function speak(text) {
@@ -198,7 +191,6 @@ function initAI() {
 
     camera = new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
-        // 広角を維持するための解像度指定
         width: { ideal: 1280 }, height: { ideal: 720 }
     });
     
@@ -209,28 +201,45 @@ function initAI() {
 
 function spawnTarget() {
     target.x = 0.1 + Math.random() * 0.8;
-    target.y = 0.1 + Math.random() * 0.8;
+    // Y座標は0.1〜0.6（上の方）に出現させ、ジャンプや背伸びを要求する
+    target.y = 0.1 + Math.random() * 0.5; 
     target.active = true;
 }
 
 function onResults(results) {
+    // 🌟 画質改善：キャンバス解像度を実際のカメラ入力に合わせる（ガラケー画質の原因解消）
+    if (canvasElement.width !== results.image.width) {
+        canvasElement.width = results.image.width;
+        canvasElement.height = results.image.height;
+    }
+
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // 画像を描画 (CSSで反転させているのでここでは普通に描画)
+    // 背景の描画
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 🌟 緑の線は一切描画しない！ 両手首の赤い点だけ！
-        drawLandmarks(canvasCtx, [results.poseLandmarks[15], results.poseLandmarks[16]], {
-            color: '#FF0000', 
-            lineWidth: 5
-        }); 
+        // 🌟 緑の線は一切描画しない！ 直接キャンバスに両手首の赤い点だけをピンポイントで描画
+        const lw = results.poseLandmarks[15];
+        const rw = results.poseLandmarks[16];
+
+        canvasCtx.fillStyle = '#FF0000';
+        if (lw.visibility > 0.5) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(lw.x * canvasElement.width, lw.y * canvasElement.height, 12, 0, 2 * Math.PI);
+            canvasCtx.fill();
+        }
+        if (rw.visibility > 0.5) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(rw.x * canvasElement.width, rw.y * canvasElement.height, 12, 0, 2 * Math.PI);
+            canvasCtx.fill();
+        }
         
         processGame(results.poseLandmarks);
     }
     
-    // 🌟 「魔」ターゲットの高画質・ベクター描画
+    // 🌟 魔の文字を高画質＆クリーンに描画
     if (target.active && gameState !== "FINISHED") {
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
@@ -239,21 +248,21 @@ function onResults(results) {
         // 赤い円
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
-        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.8)';
         canvasCtx.fill();
-        canvasCtx.lineWidth = 4;
+        canvasCtx.lineWidth = 3;
         canvasCtx.strokeStyle = '#fff';
         canvasCtx.stroke();
         
-        // 魔の文字（CSSでキャンバスが反転するので、ここで逆向きに描画して相殺する）
+        // 文字の反転相殺と高画質テキスト
         canvasCtx.save();
         canvasCtx.translate(px, py);
         canvasCtx.scale(-1, 1); 
         canvasCtx.fillStyle = '#fff';
-        canvasCtx.font = `bold ${pr * 1.2}px 'DotGothic16', sans-serif`;
+        canvasCtx.font = `bold ${pr * 1.3}px 'DotGothic16', sans-serif`;
         canvasCtx.textAlign = "center";
         canvasCtx.textBaseline = "middle";
-        canvasCtx.fillText("魔", 0, 0);
+        canvasCtx.fillText("魔", 0, pr * 0.1);
         canvasCtx.restore();
     }
     
@@ -266,7 +275,6 @@ function processGame(landmarks) {
         spawnTarget();
         speak("バトルスタート！！");
         
-        // 🌟 点線ガイドを表示
         document.getElementById('body_guide').style.display = 'block';
         
         try {
@@ -304,14 +312,14 @@ function processGame(landmarks) {
         const distLeft = Math.hypot(leftWrist.x - target.x, leftWrist.y - target.y);
         const distRight = Math.hypot(rightWrist.x - target.x, rightWrist.y - target.y);
         
-        // 🌟 1タップ1ポイント！触れたら即座に消す！
+        // 🌟 1タップ1ポイント完全対応。触れた瞬間に即座にフラグを折り、加算する。
         if (target.active && (distLeft < target.radius || distRight < target.radius)) {
-            target.active = false; // 先に消して重複防止
+            target.active = false;
             score++;
             document.getElementById('score_display').innerText = score;
             speak("撃破！");
             
-            setTimeout(spawnTarget, 300);
+            setTimeout(spawnTarget, 200);
         }
     }
 }
