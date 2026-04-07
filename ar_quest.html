@@ -25,22 +25,20 @@
             left: 0; 
             width: 100%; 
             height: 100%; 
-            /* 広角維持（クロップさせない） */
             object-fit: contain; 
-            /* 画面を水平反転（完全な鏡表示） */
             transform: scaleX(-1); 
         }
         
         video { display: none; }
         
-        /* 人型点線ガイド（下部に小さく配置してジャンプを誘発） */
+        /* 人型点線ガイド（少し上に移動、サイズを少し大きく） */
         #body_guide {
             position: absolute;
-            bottom: 2%;
+            bottom: 8%; 
             left: 50%;
             transform: translateX(-50%);
-            width: 40%;
-            height: 40%;
+            width: 50%;
+            height: 50%;
             opacity: 0.5;
             pointer-events: none;
             z-index: 5;
@@ -94,7 +92,7 @@
 
 <div id="start_screen" class="overlay">
     <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR BATTLE QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳(全身)で魔王をぶっ叩け！</p>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳と足で魔王をぶっ叩け！</p>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
     <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ BATTLE開始</button>
@@ -105,6 +103,8 @@
     <canvas id="output_canvas"></canvas>
     
     <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Ccircle cx='50' cy='25' r='15' fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' /%3E%3Cpath fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' stroke-linejoin='round' d='M 35 40 L 65 40 L 85 90 L 75 100 L 65 60 L 65 110 L 70 190 L 55 190 L 50 120 L 45 190 L 30 190 L 35 110 L 35 60 L 25 100 L 15 90 Z' /%3E%3C/svg%3E">
+
+    <div id="center_message" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:50px; color:#fff; text-shadow:0 0 10px #0ff; z-index:50; pointer-events:none; white-space:nowrap; font-weight:bold;">全身を枠に入れて！</div>
 
     <div class="ui-layer">
         <div class="header">
@@ -135,36 +135,28 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
-let gameState = "SETUP"; 
+let gameState = "SETUP"; // SETUP -> CALIBRATING -> COUNTDOWN -> PLAYING -> FINISHED
 let score = 0;
-let timeLeft = 60; // 60秒
+let timeLeft = 60;
 let timerInterval;
+let countdownValue = 5;
+let countdownTimer;
 
 let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// ターゲットサイズを小さく設定（0.035 = 画面幅の3.5%）
-let target = { x: 0.5, y: 0.5, radius: 0.035, active: false };
+// ターゲットのサイズを少しだけ大きく設定 (0.045)
+let target = { x: 0.5, y: 0.5, radius: 0.045, active: false };
 let playId = "", playPass = "";
 
-function speak(text) {
-    window.speechSynthesis.cancel();
-    const uttr = new SpeechSynthesisUtterance(text);
-    uttr.lang = "ja-JP";
-    uttr.rate = 1.3;
-    window.speechSynthesis.speak(uttr);
-}
+// 音声機能はすべて削除しました
 
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
     
     if(!playId || !playPass) { alert("IDとパスワードを入れてくれ！"); return; }
-
-    const unlockUttr = new SpeechSynthesisUtterance("");
-    unlockUttr.volume = 0;
-    window.speechSynthesis.speak(unlockUttr);
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -194,20 +186,25 @@ function initAI() {
         width: { ideal: 1280 }, height: { ideal: 720 }
     });
     
-    camera.start().catch(err => {
+    camera.start().then(() => {
+        gameState = "CALIBRATING";
+        document.getElementById('body_guide').style.display = 'block';
+        const msg = document.getElementById('center_message');
+        msg.style.display = 'block';
+        msg.innerText = "全身を枠に入れて！";
+    }).catch(err => {
         alert("カメラの起動に失敗しました。ブラウザの再読み込みをして、カメラを許可してください！");
     });
 }
 
 function spawnTarget() {
     target.x = 0.1 + Math.random() * 0.8;
-    // Y座標は0.1〜0.6（上の方）に出現させ、ジャンプや背伸びを要求する
-    target.y = 0.1 + Math.random() * 0.5; 
+    // 🌟 Y座標を0.25〜0.95の範囲に変更（上のUIに隠れず、足元にも出現）
+    target.y = 0.25 + Math.random() * 0.7; 
     target.active = true;
 }
 
 function onResults(results) {
-    // 🌟 画質改善：キャンバス解像度を実際のカメラ入力に合わせる（ガラケー画質の原因解消）
     if (canvasElement.width !== results.image.width) {
         canvasElement.width = results.image.width;
         canvasElement.height = results.image.height;
@@ -216,36 +213,30 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // 背景の描画
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 🌟 緑の線は一切描画しない！ 直接キャンバスに両手首の赤い点だけをピンポイントで描画
-        const lw = results.poseLandmarks[15];
-        const rw = results.poseLandmarks[16];
-
+        // 両手首(15,16)と両足首(27,28)の座標を取得
+        const trackedPoints = [15, 16, 27, 28];
+        
         canvasCtx.fillStyle = '#FF0000';
-        if (lw.visibility > 0.5) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(lw.x * canvasElement.width, lw.y * canvasElement.height, 12, 0, 2 * Math.PI);
-            canvasCtx.fill();
-        }
-        if (rw.visibility > 0.5) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(rw.x * canvasElement.width, rw.y * canvasElement.height, 12, 0, 2 * Math.PI);
-            canvasCtx.fill();
-        }
+        trackedPoints.forEach(idx => {
+            const pt = results.poseLandmarks[idx];
+            if (pt && pt.visibility > 0.5) {
+                canvasCtx.beginPath();
+                canvasCtx.arc(pt.x * canvasElement.width, pt.y * canvasElement.height, 12, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            }
+        });
         
         processGame(results.poseLandmarks);
     }
     
-    // 🌟 魔の文字を高画質＆クリーンに描画
-    if (target.active && gameState !== "FINISHED") {
+    if (target.active && gameState === "PLAYING") {
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
         const pr = target.radius * canvasElement.width;
         
-        // 赤い円
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
         canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.8)';
@@ -254,7 +245,6 @@ function onResults(results) {
         canvasCtx.strokeStyle = '#fff';
         canvasCtx.stroke();
         
-        // 文字の反転相殺と高画質テキスト
         canvasCtx.save();
         canvasCtx.translate(px, py);
         canvasCtx.scale(-1, 1); 
@@ -270,67 +260,100 @@ function onResults(results) {
 }
 
 function processGame(landmarks) {
-    if (gameState === "SETUP") {
-        gameState = "PLAYING";
-        spawnTarget();
-        speak("バトルスタート！！");
-        
-        document.getElementById('body_guide').style.display = 'block';
-        
-        try {
-            const stream = canvasElement.captureStream(30);
-            let options = {};
-            if (MediaRecorder.isTypeSupported('video/mp4')) {
-                options = { mimeType: 'video/mp4' };
-                videoExtension = 'mp4';
-                videoMimeType = 'video/mp4';
-            } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                options = { mimeType: 'video/webm' };
-                videoExtension = 'webm';
-                videoMimeType = 'video/webm';
-            }
+    if (gameState === "CALIBRATING") {
+        // 肩(11,12)と足首(27,28)がすべて画面内に収まっているかチェック
+        const pointsToCheck = [landmarks[11], landmarks[12], landmarks[27], landmarks[28]];
+        const allVisibleAndInFrame = pointsToCheck.every(pt => 
+            pt && pt.visibility > 0.5 && 
+            pt.x > 0.1 && pt.x < 0.9 && 
+            pt.y > 0.1 && pt.y < 0.95
+        );
 
-            mediaRecorder = new MediaRecorder(stream, options);
-            recordedChunks = [];
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = saveVideo;
-            mediaRecorder.start();
-        } catch(err) {
-            console.log("録画エラー: ", err);
+        if (allVisibleAndInFrame) {
+            gameState = "COUNTDOWN";
+            startCountdown();
         }
-        
-        timerInterval = setInterval(() => {
-            timeLeft--;
-            document.getElementById('time_display').innerText = timeLeft;
-            if (timeLeft <= 0) finishGame();
-        }, 1000);
     } 
     else if (gameState === "PLAYING") {
-        const leftWrist = landmarks[15];
-        const rightWrist = landmarks[16];
+        const trackedPoints = [15, 16, 27, 28]; // 両手両足
         
-        const distLeft = Math.hypot(leftWrist.x - target.x, leftWrist.y - target.y);
-        const distRight = Math.hypot(rightWrist.x - target.x, rightWrist.y - target.y);
-        
-        // 🌟 1タップ1ポイント完全対応。触れた瞬間に即座にフラグを折り、加算する。
-        if (target.active && (distLeft < target.radius || distRight < target.radius)) {
-            target.active = false;
-            score++;
-            document.getElementById('score_display').innerText = score;
-            speak("撃破！");
-            
-            setTimeout(spawnTarget, 200);
+        if (target.active) {
+            let hit = false;
+            trackedPoints.forEach(idx => {
+                const pt = landmarks[idx];
+                if (pt && pt.visibility > 0.5) {
+                    const dist = Math.hypot(pt.x - target.x, pt.y - target.y);
+                    if (dist < target.radius) hit = true;
+                }
+            });
+
+            // 1タップ1ポイント完全対応
+            if (hit) {
+                target.active = false;
+                score++;
+                document.getElementById('score_display').innerText = score;
+                setTimeout(spawnTarget, 200);
+            }
         }
     }
+}
+
+function startCountdown() {
+    const msg = document.getElementById('center_message');
+    msg.innerText = countdownValue;
+    
+    countdownTimer = setInterval(() => {
+        countdownValue--;
+        if (countdownValue > 0) {
+            msg.innerText = countdownValue;
+        } else {
+            clearInterval(countdownTimer);
+            msg.style.display = 'none';
+            document.getElementById('body_guide').style.display = 'none';
+            startGame();
+        }
+    }, 1000);
+}
+
+function startGame() {
+    gameState = "PLAYING";
+    spawnTarget();
+    
+    // 録画開始
+    try {
+        const stream = canvasElement.captureStream(30);
+        let options = {};
+        if (MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { mimeType: 'video/mp4' };
+            videoExtension = 'mp4';
+            videoMimeType = 'video/mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+            options = { mimeType: 'video/webm' };
+            videoExtension = 'webm';
+            videoMimeType = 'video/webm';
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = saveVideo;
+        mediaRecorder.start();
+    } catch(err) {
+        console.log("録画エラー: ", err);
+    }
+    
+    // ゲームタイマー開始
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('time_display').innerText = timeLeft;
+        if (timeLeft <= 0) finishGame();
+    }, 1000);
 }
 
 function finishGame() {
     gameState = "FINISHED";
     clearInterval(timerInterval);
-    speak("終了！よくやった！");
 
-    document.getElementById('body_guide').style.display = 'none';
-    
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
     document.getElementById('result_overlay').style.display = "flex";
