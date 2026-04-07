@@ -535,7 +535,8 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
-    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${score}`)
+    // 🌟 アクション名を squat_clear に変更（GAS側でこれをキャッチしてAL列に保存してください）
+    fetch(`${GAS_URL}?action=squat_clear&uid=${playId}&pass=${playPass}&score=${score}`)
         .then(res => res.json())
         .then(data => {})
         .catch(err => {});
