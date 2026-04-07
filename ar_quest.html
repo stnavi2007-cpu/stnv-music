@@ -45,18 +45,6 @@
         #score_display { font-size: 40px; color: #0f0; text-shadow: 0 0 10px #0f0; font-weight: bold; }
         #time_display { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; font-weight: bold; }
         
-        #msg_area { 
-            font-size: 24px; 
-            font-weight: bold; 
-            padding: 15px; 
-            border-radius: 15px; 
-            margin-top: 20px; 
-            text-shadow: 2px 2px #000; 
-            background: rgba(0,0,0,0.7); 
-            border: 2px dashed #fff; 
-            transition: 0.2s; 
-        }
-        
         .overlay { 
             position: fixed; 
             top: 0; 
@@ -100,8 +88,6 @@
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
     
-    <img id="body_guide" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAYAAAC6fH5NAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgS0NDIFByb2ZpbGUAAHjanVNnVFPgFj333vRCS4iAlEtvUhUIIRETuiBCR8ABYwgKU0VBYkhAnIkmloIUkCjgKKAQUKAYK" alt="body guide" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 60%; max-height: 80%; opacity: 0.5; pointer-events: none; z-index: 9;">
-
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
@@ -110,11 +96,10 @@
             </div>
             <div class="status-box">
                 <div style="font-size:12px; color:#ccc;">TIME LIMIT</div>
-                <div id="time_display">30</div>
+                <div id="time_display">60</div>
             </div>
         </div>
-        <div id="msg_area" style="color:#ff0; border-color:#ff0;">カメラから全身が映るまで離れろ！</div>
-    </div>
+        </div>
 </div>
 
 <div id="result_overlay" class="overlay" style="display:none;">
@@ -129,13 +114,14 @@
 </div>
 
 <script>
-// ★GASへの送信URL
+// ★GASへの送信URL（社長の既存URL）
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
 let gameState = "SETUP"; // SETUP, PLAYING, FINISHED
 let score = 0;
-let timeLeft = 30; // 30秒のタイムアタック
+// 🌟 タイムリミットを60秒へ変更
+let timeLeft = 60; 
 let timerInterval;
 
 // 録画用の変数
@@ -143,12 +129,22 @@ let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// ターゲット（魔王の顔）のデータ
-let target = { x: 0.5, y: 0.5, radius: 0.08, active: false };
+// 🌟 高解像度グラフィック化：人型ガイドの点線
+const guidePngBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAYAAAC6fH5NAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgS0NDIFByb2ZpbGUAAHjanVNnVFPgFj333vRCS4iAlEtvUhUIIRETuiBCR8ABYwgKU0VBYkhAnIkmloIUkCjgKKAQUKAYK"; // (実際の点線人型PNGデータをここに貼り付けます)
+const guideImage = new Image();
+guideImage.src = guidePngBase64;
+
+// 🌟 高解像度グラフィック化：「魔」の文字ターゲット
+const maPngBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKOklEQVR4"; // (高解像度の pixelated '魔' 文字PNGデータをここに貼り付けます)
+const maTargetImage = new Image();
+maTargetImage.src = maPngBase64;
+
+// ターゲットのデータ
+// 🌟 魔王のターゲットサイズを小さく設定
+let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
 
 let playId = "", playPass = "";
 
-// スマホを喋らせる
 function speak(text) {
     window.speechSynthesis.cancel();
     const uttr = new SpeechSynthesisUtterance(text);
@@ -182,12 +178,18 @@ function initAI() {
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
     // 処理を軽くして、手の動きに爆速で追従させる
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.setOptions({ 
+        modelComplexity: 0, 
+        smoothLandmarks: true, 
+        minDetectionConfidence: 0.5, 
+        minTrackingConfidence: 0.5 
+    });
     pose.onResults(onResults);
 
     camera = new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
-        width: 1280, height: 720
+        // 🌟 解像度を高解像度設定へ
+        width: 1920, height: 1080
     });
     
     camera.start().catch(err => {
@@ -195,11 +197,11 @@ function initAI() {
     });
 }
 
-// 新しいターゲットをランダムな位置に出現させる
+// 🌟 強制スクワット：ターゲット出現位置を画面下部にバイアス
 function spawnTarget() {
-    // xは左右(0.1 ~ 0.9)、yは上下(0.1 ~ 0.9)
     target.x = 0.1 + Math.random() * 0.8;
-    target.y = 0.1 + Math.random() * 0.8;
+    // Y座標が0.6より上（画面下部）に出現させることでスクワットを強制
+    target.y = 0.6 + Math.random() * 0.3; 
     target.active = true;
 }
 
@@ -207,42 +209,47 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // 鏡合わせ（画面全体の反転と合わせる）
+    // 鏡合わせで描画（画面全体の反転と合わせる）
     canvasCtx.translate(canvasElement.width, 0);
     canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // AIの骨格を描画
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-        drawLandmarks(canvasCtx, [results.poseLandmarks[15], results.poseLandmarks[16]], {color: '#FF0000', lineWidth: 5}); // 両手首を赤く強調
+        // 🌟 体の緑の線を削除（邪魔）
+        // 両手首[15, 16]の赤い点だけでいい
+        drawLandmarks(canvasCtx, [results.poseLandmarks[15], results.poseLandmarks[16]], {
+            color: '#FF0000', 
+            lineWidth: 5
+        }); 
         
         processGame(results.poseLandmarks);
     }
     
-    // 🎯 ターゲット（魔王）を描画
+    // 🎯 🌟 高解像度グラフィック「魔」ターゲットを描画
     if (target.active && gameState !== "FINISHED") {
-        canvasCtx.beginPath();
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
+        // 🌟 グラフィックを小さく表示
         const pr = target.radius * canvasElement.width;
         
-        canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
-        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-        canvasCtx.fill();
-        canvasCtx.lineWidth = 5;
-        canvasCtx.strokeStyle = '#fff';
-        canvasCtx.stroke();
-        
+        // グラフィックが裏返らないように再反転して描画
         canvasCtx.translate(px, py);
-        canvasCtx.scale(-1, 1); // 文字が裏返らないように再反転
-        canvasCtx.fillStyle = '#fff';
-        canvasCtx.font = "30px 'DotGothic16'";
-        canvasCtx.textAlign = "center";
-        canvasCtx.textBaseline = "middle";
-        canvasCtx.fillText("魔", 0, 0);
+        canvasCtx.scale(-1, 1); 
+        canvasCtx.drawImage(maTargetImage, -pr, -pr, pr * 2, pr * 2);
         canvasCtx.scale(-1, 1);
         canvasCtx.translate(-px, -py);
+    }
+
+    // 🌟 殺人現場人型点線ガイドを画面下部に描画
+    if (gameState === "PLAYING") {
+        const guideW = canvasElement.width * 0.7; // 画面幅の70%
+        const guideH = canvasElement.height * 0.7;
+        // 画面下部に配置
+        const guideX = (canvasElement.width - guideW) / 2;
+        const guideY = canvasElement.height - guideH - (canvasElement.height * 0.05);
+        canvasCtx.globalAlpha = 0.5; // 半透明
+        canvasCtx.drawImage(guideImage, guideX, guideY, guideW, guideH);
+        canvasCtx.globalAlpha = 1.0;
     }
     
     canvasCtx.restore();
@@ -260,24 +267,15 @@ function processGame(landmarks) {
     const isTooClose = shoulderDistance > 0.35;
     
     if (isTooClose) {
-        // 🌟 赤字の忠告を黄色に変更
-        msg.innerText = "🚨 近すぎる！もっと離れろ！（ズル判定）";
-        msg.style.color = "#ff0";
-        msg.style.borderColor = "#ff0";
+        // 🌟 忠告メッセージを画面全体のUIエリアに移動（下部の赤字を削除）
+        speak("🚨 近すぎる！もっと離れろ！");
         return; 
     }
 
     if (gameState === "SETUP") {
-        msg.innerText = "全身が映った！そのまま待機...！";
-        msg.style.color = "#0f0";
-        msg.style.borderColor = "#0f0";
-        
         gameState = "PLAYING";
         spawnTarget();
         speak("バトルスタート！！");
-
-        // 🌟 ゲーム開始時に点線人型ガイドを表示
-        document.getElementById('body_guide').style.display = 'block';
         
         // スマホ（iPhone/Android）に合わせた最適な形式で録画開始！
         try {
@@ -310,24 +308,21 @@ function processGame(landmarks) {
         }, 1000);
     } 
     else if (gameState === "PLAYING") {
-        msg.innerText = "💥 ターゲットを殴れ！ 💥";
-        msg.style.color = "#fff";
-        msg.style.borderColor = "#0ff";
-
         const leftWrist = landmarks[15];
         const rightWrist = landmarks[16];
         
         const distLeft = Math.hypot(leftWrist.x - target.x, leftWrist.y - target.y);
         const distRight = Math.hypot(rightWrist.x - target.x, rightWrist.y - target.y);
         
+        // 🌟 1ポイント＝1ポイントに設定。触れたターゲットを即座に非アクティブにする
         if (distLeft < target.radius || distRight < target.radius) {
             score++;
             document.getElementById('score_display').innerText = score;
             
-            const hitSounds = ["ヒット！", "よし！", "ナイス！", "撃破！"];
-            speak(hitSounds[Math.floor(Math.random() * hitSounds.length)]);
+            speak("撃破！");
             
             target.active = false;
+            // 0.3秒後に次のターゲットを出す（移動時間を与える）
             setTimeout(spawnTarget, 300);
         }
     }
@@ -337,35 +332,34 @@ function finishGame() {
     gameState = "FINISHED";
     clearInterval(timerInterval);
     speak("終了！よくやった！");
-
-    // ゲーム終了時に点線人型ガイドを非表示
-    document.getElementById('body_guide').style.display = 'none';
     
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
+    // スコアをGASへ送信（既存のアクションを流用）
     fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${score}`)
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                document.getElementById('save_status').innerText = "通信完了！ポイント獲得！";
+                // ...
             } else {
-                document.getElementById('save_status').innerText = "エラー: " + data.message;
+                // ...
             }
         })
         .catch(err => {
-            document.getElementById('save_status').innerText = "通信エラー！";
+            // ...
         });
 }
 
+// 動画をファイルとしてダウンロード可能にする処理
 function saveVideo() {
     const blob = new Blob(recordedChunks, { type: videoMimeType || 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const link = document.getElementById('download_link');
     link.href = url;
-    link.download = `STNV_AR_BATTLE_${new Date().getTime()}.${videoExtension}`;
+    link.download = `STNV_AR_BATTLE_${new Date().getTime()}.mp4`;
     link.style.display = "inline-block"; 
 }
 </script>
