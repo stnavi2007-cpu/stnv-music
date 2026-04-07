@@ -12,7 +12,7 @@
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { position: relative; width: 100vw; height: 100vh; background: #000; display: none; }
-        /* 🌟修正：object-fit: contain に変更し、無駄なズームを廃止。本来の画質へ。 */
+        /* 映像は鏡（ミラー）のまま */
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
@@ -37,16 +37,16 @@
 
 <div id="start_screen" class="overlay">
     <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR BATTLE QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳(全身)で魔王をぶっ叩け！</p>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">直感操作で魔王を叩きのめせ！</p>
     <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
         【ルール】<br>
-        ① スマホを壁に立てかけろ！<br>
-        ② 現れるシルエットの中に綺麗に収まれ！<br>
-        ③ ゲームが始まったら、魔のマークを手で殴れ！
+        ① スマホを床近くの壁に立てかけろ！<br>
+        ② 下に現れる立体シルエットの中に深く収まれ！<br>
+        ③ 1分間、現れる「魔」を左右直感操作で叩け！
     </div>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
-    <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ BATTLE開始</button>
+    <button class="btn" onclick="loginAndStart()">BATTLE開始（60秒）</button>
 </div>
 
 <div id="video_container">
@@ -61,10 +61,10 @@
             </div>
             <div class="status-box">
                 <div style="font-size:12px; color:#ccc;">TIME LIMIT</div>
-                <div id="time_display">30</div>
+                <div id="time_display">60</div>
             </div>
         </div>
-        <div id="msg_area">シルエットに入れ！</div>
+        <div id="msg_area">下の人型に入れ！</div>
     </div>
 </div>
 
@@ -85,10 +85,10 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPV
 let pose, camera, videoElement, canvasElement, canvasCtx;
 let gameState = "SETUP"; // SETUP, STANDBY, COUNTDOWN, PLAYING, FINISHED
 let score = 0;
-let timeLeft = 30; 
+// 🌟修正：制限時間を60秒に変更
+let timeLeft = 60; 
 let timerInterval;
 
-// 🌟修正：シルエットスタンバイ用の変数
 let standbyTimer = null;
 let standbyCount = 5;
 
@@ -96,8 +96,9 @@ let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// 🌟修正：魔王のマークを小型化 (0.08 -> 0.05)
 let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
+// 🌟修正：複数カウント防止フラグ
+let canHit = true; 
 let playId = "", playPass = "";
 
 function speak(text) {
@@ -128,13 +129,11 @@ function initAI() {
     pose = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
-    // 🌟修正：画質・精度向上のため、modelComplexityを 1 に設定
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
     pose.onResults(onResults);
 
     camera = new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
-        // 🌟修正：普段の内カメラの画質を理想値として設定
         width: { ideal: 1920 },
         height: { ideal: 1080 }
     });
@@ -142,49 +141,79 @@ function initAI() {
 }
 
 function spawnTarget() {
+    // 🌟修正：直感操作に合わせて出現範囲を調整。下部に出やすくする。
     target.x = 0.15 + Math.random() * 0.7;
-    target.y = 0.15 + Math.random() * 0.7;
+    target.y = 0.3 + Math.random() * 0.6; // 0.3~0.9の範囲（画面下部）
     target.active = true;
+    canHit = true; // 当たり判定を復活
 }
 
-// 🌟修正：人型シルエット（点線）を描画する関数
+// 🌟修正：サイバーな立体人型シルエット（小型・下配置）
 function drawSilhouette(isReady) {
     canvasCtx.save();
-    canvasCtx.lineWidth = 8;
-    // 収まったら緑、待機中は黄色い点線
+    canvasCtx.lineWidth = 6;
     if (isReady) {
-        canvasCtx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-        canvasCtx.setLineDash([]);
+        canvasCtx.strokeStyle = 'rgba(0, 255, 0, 0.9)'; // 収まったら緑
+        canvasCtx.shadowColor = 'lime';
+        canvasCtx.shadowBlur = 20;
     } else {
-        canvasCtx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
-        canvasCtx.setLineDash([15, 10]);
+        canvasCtx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // 待機中はサイバーブルー
+        canvasCtx.setLineDash([10, 5]);
     }
     
     const w = canvasElement.width;
     const h = canvasElement.height;
     const cx = w / 2;
     
+    // 🌟修正：サイズを小型化し、配置を下に。
+    const scale = 0.7; // 30%小型化
+    const yOffset = h * 0.15; // 下に下げる
+
+    canvasCtx.translate(0, yOffset);
+    canvasCtx.scale(1, scale); // 縦に少し潰して立体感を出す
+    
     canvasCtx.beginPath();
-    // 頭
-    canvasCtx.arc(cx, h * 0.2, h * 0.08, 0, Math.PI * 2);
-    // 体
-    canvasCtx.moveTo(cx, h * 0.28);
-    canvasCtx.lineTo(cx, h * 0.6);
-    // 腕（前ならえ）
-    canvasCtx.moveTo(cx - w * 0.15, h * 0.4);
-    canvasCtx.lineTo(cx + w * 0.15, h * 0.4);
+    // 頭（六角形っぽく）
+    const r = h * 0.06;
+    for(let i=0; i<6; i++) {
+        const ang = (Math.PI/3) * i;
+        const x = cx + r * Math.sin(ang);
+        const y = h * 0.2 + r * Math.cos(ang);
+        if(i===0) canvasCtx.moveTo(x,y); else canvasCtx.lineTo(x,y);
+    }
+    canvasCtx.closePath();
+
+    // 体・四肢（カクカクした立体デザイン）
+    // 胴体
+    canvasCtx.moveTo(cx - w*0.06, h*0.28);
+    canvasCtx.lineTo(cx + w*0.06, h*0.28);
+    canvasCtx.lineTo(cx + w*0.04, h*0.6);
+    canvasCtx.lineTo(cx - w*0.04, h*0.6);
+    canvasCtx.closePath();
+    
+    // 腕
+    const armY = h * 0.35;
+    canvasCtx.moveTo(cx - w*0.06, h*0.28);
+    canvasCtx.lineTo(cx - w*0.18, armY);
+    canvasCtx.lineTo(cx - w*0.15, armY + h*0.15);
+    
+    canvasCtx.moveTo(cx + w*0.06, h*0.28);
+    canvasCtx.lineTo(cx + w*0.18, armY);
+    canvasCtx.lineTo(cx + w*0.15, armY + h*0.15);
+    
     // 脚
-    canvasCtx.moveTo(cx, h * 0.6);
-    canvasCtx.lineTo(cx - w * 0.1, h * 0.85);
-    canvasCtx.moveTo(cx, h * 0.6);
-    canvasCtx.lineTo(cx + w * 0.1, h * 0.85);
+    const legY = h * 0.6;
+    canvasCtx.moveTo(cx - w*0.04, legY);
+    canvasCtx.lineTo(cx - w*0.1, h*0.85);
+    
+    canvasCtx.moveTo(cx + w*0.04, legY);
+    canvasCtx.lineTo(cx + w*0.1, h*0.85);
     
     canvasCtx.stroke();
     canvasCtx.restore();
 }
 
 function onResults(results) {
-    // 🌟修正：キャンバスの解像度をスマホの画面に合わせる
     if (canvasElement.width !== videoElement.videoWidth) {
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
@@ -193,40 +222,42 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // 鏡合わせ
     canvasCtx.translate(canvasElement.width, 0);
     canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 🌟修正：顔や体の緑の線を全削除。 drawConnectorsを呼ばない。
-        
-        // 🌟修正：手首（15, 16）のみに赤い光の印を描画
-        const wrists = [results.poseLandmarks[15], results.poseLandmarks[16]];
+        // 🌟修正：左右直感操作のための革命的なハック！
+        // AIが検知した座標を、プログラム内部でX軸反転させることで、
+        // 「鏡に映る右手を動かせば、画面右側のターゲットが叩ける」ようにする。
+        const landmarks = results.poseLandmarks.map(p => ({
+            ...p,
+            x: 1.0 - p.x // X座標を反転！これぞ直感操作！
+        }));
+
+        // 手首（15, 16）のみに赤い光の印を描画
+        // 🌟修正：描画位置も反転座標に合わせる
+        const wrists = [landmarks[15], landmarks[16]];
         
         canvasCtx.save();
-        // 镜合わせを考慮して描画
         for (const wrist of wrists) {
             canvasCtx.beginPath();
-            // 赤い光の円
             canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 25, 0, Math.PI * 2);
-            canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.6)'; // 少し透明な赤
+            canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.6)';
             canvasCtx.fill();
-            // 中央の白い芯
             canvasCtx.beginPath();
             canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 10, 0, Math.PI * 2);
             canvasCtx.fillStyle = 'white';
             canvasCtx.fill();
-            // グロー効果（影）
             canvasCtx.shadowColor = 'red';
             canvasCtx.shadowBlur = 30;
             canvasCtx.stroke();
         }
         canvasCtx.restore();
 
-        processGame(results.poseLandmarks);
+        // 🌟修正：反転させた座標をゲームロジックに渡す
+        processGame(landmarks);
     } else {
-        // 人が映っていない時もシルエットは出す
         if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
             drawSilhouette(false);
         }
@@ -237,23 +268,21 @@ function onResults(results) {
         canvasCtx.save();
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
-        // 🌟修正：半径を小さく設定 (小型化)
         const pr = 0.05 * canvasElement.width; 
         
-        // 高解像度な円を描画
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
         canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.8)';
         canvasCtx.fill();
         canvasCtx.lineWidth = 6;
-        canvasCtx.strokeStyle = '#fff'; // 白い枠線
+        canvasCtx.strokeStyle = '#fff';
         canvasCtx.stroke();
         
-        // 🌟修正：「魔」の文字を高解像度でクリアに描画
         canvasCtx.translate(px, py);
-        canvasCtx.scale(-1, 1); // 鏡合わせを文字だけ戻す
+        // 🌟修正：操作は直感だが、文字は鏡合わせで読めるように再反転
+        canvasCtx.scale(1, 1); // ここはミラーのままで文字を出す
+        canvasCtx.scale(-1, 1); // 再反転して読めるように
         canvasCtx.fillStyle = '#fff';
-        // 小型化に合わせてフォントサイズを調整。シャドウでクッキリさせる。
         canvasCtx.font = "bold 40px 'DotGothic16'"; 
         canvasCtx.textAlign = "center";
         canvasCtx.textBaseline = "middle";
@@ -270,7 +299,6 @@ function onResults(results) {
 function processGame(landmarks) {
     const msg = document.getElementById('msg_area');
     
-    // ズル防止検知（肩幅）はPLAYING中のみ
     if (gameState === "PLAYING") {
         const shoulderDistance = Math.abs(landmarks[11].x - landmarks[12].x);
         if (shoulderDistance > 0.35) {
@@ -280,43 +308,40 @@ function processGame(landmarks) {
         }
     }
 
-    // 🌟修正：シルエット・カウントダウンロジック
     if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
-        // 主要ポイント（頭、両肩、両ヒップ）が画面内に収まっているかチェック
+        // 主要ポイント（頭、両肩、両ヒップ）
+        // 🌟修正：小型シルエットに合わせて判定を厳しく（visibility > 0.9）
         const keyPoints = [landmarks[0], landmarks[11], landmarks[12], landmarks[23], landmarks[24]];
-        const isReady = keyPoints.every(p => p.visibility > 0.8 && p.x > 0.2 && p.x < 0.8 && p.y > 0.1 && p.y < 0.9);
+        // 🌟修正：配置を下に下げたので、Y座標の判定範囲を下側にずらす (0.3 ~ 1.0)
+        const isReady = keyPoints.every(p => p.visibility > 0.9 && p.x > 0.25 && p.x < 0.75 && p.y > 0.3 && p.y < 1.0);
         
         drawSilhouette(isReady);
         
         if (isReady) {
             if (gameState !== "COUNTDOWN") {
-                // 収まった瞬間、カウントダウン開始
                 gameState = "COUNTDOWN";
                 standbyCount = 5;
                 msg.innerText = standbyCount;
                 msg.style.color = "#ff0";
-                speak("そのまま動くな！ 5");
-                
+                speak("動くな！ 5");
                 standbyTimer = setInterval(() => {
                     standbyCount--;
                     if (standbyCount > 0) {
                         msg.innerText = standbyCount;
                         speak(standbyCount);
                     } else {
-                        // カウントダウン終了、ゲーム開始
                         clearInterval(standbyTimer);
                         startGame();
                     }
                 }, 1000);
             }
         } else {
-            // シルエットから外れたらリセット
             if (gameState === "COUNTDOWN") {
                 clearInterval(standbyTimer);
                 gameState = "STANDBY";
-                speak("動くなと言っただろ！最初からだ！");
+                speak("動くなと言っただろ！");
             }
-            msg.innerText = "シルエットに入れ！";
+            msg.innerText = "下の人型に入れ！";
             msg.style.color = "#fff";
         }
     } 
@@ -327,13 +352,15 @@ function processGame(landmarks) {
         const distLeft = Math.hypot(landmarks[15].x - target.x, landmarks[15].y - target.y);
         const distRight = Math.hypot(landmarks[16].x - target.x, landmarks[16].y - target.y);
         
-        // 🌟修正：当たり判定の閾値を小型化したマークに合わせる (0.05)
-        if (distLeft < 0.05 || distRight < 0.05) {
+        // 🌟修正：複数カウント防止！canHitがtrueの時のみ判定
+        if (canHit && (distLeft < 0.05 || distRight < 0.05)) {
+            canHit = false; // 一回当たったらフラグを折る。これで連打無効。
             score++;
             document.getElementById('score_display').innerText = score;
             speak("ヒット！");
             target.active = false;
-            setTimeout(spawnTarget, 200); // 出現頻度を少し上げる
+            // 🌟修正：出現頻度を少し落とす (200 -> 400)。これで直感操作を楽しめる。
+            setTimeout(spawnTarget, 400); 
         }
     }
 }
@@ -342,25 +369,21 @@ function startGame() {
     gameState = "PLAYING";
     const msg = document.getElementById('msg_area');
     msg.innerText = "START!!";
-    speak("バトルスタート！！");
+    speak("バトルスタート！！ 1分間だ！");
     spawnTarget();
     
-    // 録画開始
     try {
         const stream = canvasElement.captureStream(30);
         let options = {};
         if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
             options = { mimeType: 'video/mp4;codecs=h264' };
-            videoExtension = 'mp4';
-            videoMimeType = 'video/mp4';
+            videoExtension = 'mp4'; videoMimeType = 'video/mp4';
         } else if (MediaRecorder.isTypeSupported('video/mp4')) {
             options = { mimeType: 'video/mp4' };
-            videoExtension = 'mp4';
-            videoMimeType = 'video/mp4';
+            videoExtension = 'mp4'; videoMimeType = 'video/mp4';
         } else {
             options = { mimeType: 'video/webm' };
-            videoExtension = 'webm';
-            videoMimeType = 'video/webm';
+            videoExtension = 'webm'; videoMimeType = 'video/webm';
         }
         mediaRecorder = new MediaRecorder(stream, options);
         recordedChunks = [];
