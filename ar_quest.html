@@ -227,8 +227,8 @@
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1>🔥 AR SQUATS QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:16px; margin-top:0; text-shadow: 2px 2px 0 #000;">１枚でも多くのコインをタップ！</p>
+    <h1>🔥 PARENT-CHILD SQUATS 🔥</h1>
+    <p style="color:#0ff; font-size:16px; margin-top:0; text-shadow: 2px 2px 0 #000;">45秒で選手交代！協力してコインを稼げ！</p>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
     <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ スクワット開始</button>
@@ -288,11 +288,14 @@ let target = { x: 0.5, y: 0.5, radius: 0.06, active: false };
 let playId = "", playPass = "";
 let spawnTop = true; 
 
+// 🌟 リレー用の進行フラグ
+let hasRelayed = false;
+
 // ズル防止用の基準サイズ
 let baseShoulderWidth = 0;
 let isTooClose = false;
 
-// 🌟 Safariでの時間遅延（もっさり）対策用の変数
+// Safariでの時間遅延（もっさり）対策用の変数
 let startTimeMillis = 0;
 let exactTimeLeft = 90.0;
 let lastUpdateMillis = 0;
@@ -402,15 +405,29 @@ function initAI() {
     });
     
     camera.start().then(() => {
-        gameState = "CALIBRATING";
-        document.getElementById('body_guide').style.display = 'block';
-        const msg = document.getElementById('center_message');
-        msg.style.display = 'block';
-        msg.style.fontSize = "24px";
-        msg.innerText = "全身を枠に入れて！";
+        calibrate(); // 🌟 最初のキャリブレーションを実行
     }).catch(err => {
         alert("カメラの起動に失敗しました。ブラウザの再読み込みをして、カメラを許可してください！");
     });
+}
+
+// 🌟 キャリブレーション（人型合わせ）を関数化し、最初と45秒の交代時に呼び出す
+function calibrate() {
+    gameState = "CALIBRATING";
+    document.getElementById('body_guide').style.display = 'block';
+    const msg = document.getElementById('center_message');
+    msg.style.display = 'block';
+    msg.style.fontSize = "24px";
+    
+    // 時間が45秒以下なら「交代！」のメッセージにする
+    if (timeLeft <= 45) {
+        msg.innerText = "交代！枠に入れ！";
+    } else {
+        msg.innerText = "全身を枠に入れて！";
+    }
+    
+    // 🌟 肩幅の基準をリセット（新しい人の体格を覚え直すため）
+    baseShoulderWidth = 0; 
 }
 
 function spawnTarget() {
@@ -422,7 +439,6 @@ function spawnTarget() {
         spawnTop = Math.random() < 0.5;
     }
 
-    // 🌟 ヘッダーUI（ステータスボックス）と被らないように、少し下から出現させる
     if (spawnTop) {
         target.y = 0.25 + Math.random() * 0.15; 
     } else {
@@ -491,14 +507,11 @@ function onResults(results) {
         canvasCtx.globalAlpha = 1.0;
     }
 
-    // 🌟【録画用に追加】動画にもスコアとタイムが映るように、キャンバスに直接描画！
     if (gameState === "PLAYING") {
         canvasCtx.save();
-        // 文字が反転しないようにキャンバスを一度リセットする
         canvasCtx.scale(-1, 1);
         canvasCtx.translate(-canvasElement.width, 0);
 
-        // スコア（左上）
         canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         canvasCtx.fillRect(15, 15, 200, 60);
         canvasCtx.fillStyle = '#0f0';
@@ -506,7 +519,6 @@ function onResults(results) {
         canvasCtx.textAlign = "left";
         canvasCtx.fillText("SCORE: " + score, 25, 55);
 
-        // タイム（右上）
         canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         canvasCtx.fillRect(canvasElement.width - 215, 15, 200, 60);
         canvasCtx.fillStyle = '#ff0';
@@ -533,19 +545,17 @@ function processGame(landmarks) {
     if (gameState === "CALIBRATING") {
         if (allVisibleAndInFrame) {
             gameState = "COUNTDOWN";
-            startCountdown();
+            // 🌟 最初のスタートは5秒、交代時は3秒でカウントダウン
+            startCountdown((timeLeft <= 45) ? 3 : 5);
         } else {
             msg.style.fontSize = "24px";
-            msg.innerText = "全身を枠に入れて！";
+            msg.innerText = (timeLeft <= 45) ? "交代！枠に入れ！" : "全身を枠に入れて！";
         }
     } 
     else if (gameState === "COUNTDOWN") {
         if (!allVisibleAndInFrame) {
-            // 🌟 枠から出たらカウントダウンを「確実に止める」ように修正！
             clearInterval(countdownTimer);
-            gameState = "CALIBRATING"; 
-            msg.style.fontSize = "24px";
-            msg.innerText = "枠から出たぞ！もう一度全身を入れて！";
+            calibrate(); 
         }
     }
     else if (gameState === "PLAYING") {
@@ -556,7 +566,8 @@ function processGame(landmarks) {
             
             if (baseShoulderWidth === 0) baseShoulderWidth = currentWidth;
 
-            if (currentWidth > baseShoulderWidth * 1.15) {
+            // 🌟 肩幅の判定を少し甘め（1.20倍）にして交代時のエラーを防ぐ
+            if (currentWidth > baseShoulderWidth * 1.20) {
                 isTooClose = true;
                 document.getElementById('warning_message').style.display = 'block';
             } else {
@@ -588,8 +599,9 @@ function processGame(landmarks) {
     }
 }
 
-function startCountdown() {
-    countdownValue = 5;
+// 🌟 カウントダウン秒数を引数で受け取るように変更
+function startCountdown(seconds) {
+    countdownValue = seconds;
     const msg = document.getElementById('center_message');
     msg.style.fontSize = "150px"; 
     msg.innerText = countdownValue;
@@ -614,38 +626,42 @@ function startCountdown() {
 
 function startGame() {
     gameState = "PLAYING";
-    spawnTarget();
+    
+    // ターゲットがなければ出す（再開時にもすぐ出現）
+    if (!target.active) spawnTarget();
     startBGM(); 
     
-    try {
-        const stream = canvasElement.captureStream(30);
-        let options = {};
-        if (MediaRecorder.isTypeSupported('video/mp4')) {
-            options = { mimeType: 'video/mp4' };
-            videoExtension = 'mp4';
-            videoMimeType = 'video/mp4';
-        } else if (MediaRecorder.isTypeSupported('video/webm')) {
-            options = { mimeType: 'video/webm' };
-            videoExtension = 'webm';
-            videoMimeType = 'video/webm';
-        }
+    // 🌟 録画の開始は「最初の90秒の時」だけ実行する（途切れさせないため）
+    if (timeLeft === 90 && !hasRelayed) {
+        exactTimeLeft = 90.0;
+        try {
+            const stream = canvasElement.captureStream(30);
+            let options = {};
+            if (MediaRecorder.isTypeSupported('video/mp4')) {
+                options = { mimeType: 'video/mp4' };
+                videoExtension = 'mp4';
+                videoMimeType = 'video/mp4';
+            } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                options = { mimeType: 'video/webm' };
+                videoExtension = 'webm';
+                videoMimeType = 'video/webm';
+            }
 
-        mediaRecorder = new MediaRecorder(stream, options);
-        recordedChunks = [];
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-        mediaRecorder.onstop = saveVideo;
-        mediaRecorder.start();
-    } catch(err) {
-        console.log("録画エラー: ", err);
+            mediaRecorder = new MediaRecorder(stream, options);
+            recordedChunks = [];
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = saveVideo;
+            mediaRecorder.start();
+        } catch(err) {
+            console.log("録画エラー: ", err);
+        }
     }
     
-    // 🌟 Safariの時間もっさり対策：現実の時計（Date.now）で正確に減算する方式に変更
     lastUpdateMillis = Date.now();
-    exactTimeLeft = 90.0;
 
     timerInterval = setInterval(() => {
         let now = Date.now();
-        let deltaTime = (now - lastUpdateMillis) / 1000.0; // 前回チェックからの経過秒数
+        let deltaTime = (now - lastUpdateMillis) / 1000.0; 
         lastUpdateMillis = now;
 
         if (!isTooClose) {
@@ -654,9 +670,20 @@ function startGame() {
             if (timeLeft < 0) timeLeft = 0;
             
             document.getElementById('time_display').innerText = timeLeft;
+
+            // 🌟 【親子リレー交代システム】45秒になった瞬間に一時停止してキャリブレーションへ！
+            if (timeLeft <= 45 && !hasRelayed) {
+                hasRelayed = true; // 1回だけ発動させるフラグ
+                clearInterval(timerInterval);
+                clearInterval(bgmInterval);
+                target.active = false; // 今出ているコインを消す
+                calibrate(); // キャリブレーション状態に移行
+                return; // タイマー処理をここで抜ける
+            }
+
             if (timeLeft <= 0) finishGame();
         }
-    }, 100); // 0.1秒間隔でチェックするため絶対にもっさりしません
+    }, 100); 
 }
 
 function finishGame() {
@@ -670,15 +697,13 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
-    // 🌟 URLエンコードして安全な文字にする
     const safeId = encodeURIComponent(playId);
     const safePass = encodeURIComponent(playPass);
     const requestUrl = `${GAS_URL}?action=squat_clear&uid=${safeId}&pass=${safePass}&score=${score}`;
 
-    // 🌟 【最強通信モード】セキュリティ（CORS）を強行突破する設定を追加！
     fetch(requestUrl, {
         method: 'GET',
-        mode: 'no-cors' // これを入れるとブラウザが通信をブロックしなくなります
+        mode: 'no-cors' 
     })
     .then(() => { 
         document.getElementById('save_status').innerText = "データ送信完了！";
