@@ -62,7 +62,7 @@
             pointer-events: none;
             z-index: 5;
             display: none;
-            filter: drop-shadow(0px 0px 5px #0ff); /* ネオングロウを追加 */
+            filter: drop-shadow(0px 0px 5px #0ff); 
         }
 
         .ui-layer { 
@@ -81,20 +81,19 @@
         }
         .header { display: flex; justify-content: space-between; align-items: flex-start; }
         
-        /* 🌟 ステータスボックスをレトロRPG風に */
+        /* 🌟 ステータスボックスを半透明にし、裏のコインを見やすく */
         .status-box { 
-            background: rgba(0, 0, 0, 0.85); 
-            border: 4px solid #0ff; 
+            background: rgba(0, 0, 0, 0.3); 
+            border: 4px solid rgba(0, 255, 255, 0.6); 
             padding: 10px 15px; 
-            border-radius: 0; /* カクカクにする */
+            border-radius: 0; 
             min-width: 100px; 
-            box-shadow: 4px 4px 0 #000, inset 0 0 15px rgba(0,255,255,0.3); 
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.5), inset 0 0 15px rgba(0,255,255,0.3); 
         }
         
         #score_display { font-size: 45px; color: #0f0; text-shadow: 3px 3px 0 #000, 0 0 10px #0f0; font-weight: bold; }
         #time_display { font-size: 45px; color: #ff0; text-shadow: 3px 3px 0 #000, 0 0 10px #ff0; font-weight: bold; }
         
-        /* 🌟 背景を少しサイバーな暗がりに */
         .overlay { 
             position: fixed; 
             top: 0; 
@@ -112,7 +111,6 @@
             text-align: center; 
         }
         
-        /* 🌟 ボタンを昔のゲーム機風の立体ブロックに */
         .btn { 
             padding: 15px 30px; 
             background: #d32f2f; 
@@ -137,7 +135,6 @@
             box-shadow: inset -2px -2px 0px 0px rgba(0,0,0,0.4), 0px 0px 0px 0px #000, 0 0 5px #f00; 
         }
         
-        /* 🌟 入力フォームをレトロハッカー風に */
         input { 
             width: 80%; 
             max-width: 300px; 
@@ -160,7 +157,6 @@
         }
         input::placeholder { color: rgba(0, 255, 255, 0.4); }
         
-        /* 🌟 ダウンロードボタンを特別なゴールド仕様に */
         #download_link { 
             background: #ffb300; 
             color: #000; 
@@ -181,7 +177,6 @@
             box-shadow: inset -2px -2px 0px 0px rgba(0,0,0,0.3), 0px 0px 0px 0px #000;
         }
         
-        /* 🌟 メッセージ類をアーケードゲーム風に */
         #center_message, #warning_message {
             position: absolute; 
             top: 40%; 
@@ -220,7 +215,6 @@
             100% { border-color: #fff; box-shadow: 6px 6px 0 #000, 0 0 40px #f00; }
         }
         
-        /* タイトルの装飾 */
         h1 {
             color: #ffd700; 
             text-shadow: 4px 4px 0 #000, 0 0 15px #f00; 
@@ -298,7 +292,12 @@ let spawnTop = true;
 let baseShoulderWidth = 0;
 let isTooClose = false;
 
-// オーディオコンテキスト（コイン音＆BGM用）
+// 🌟 Safariでの時間遅延（もっさり）対策用の変数
+let startTimeMillis = 0;
+let exactTimeLeft = 90.0;
+let lastUpdateMillis = 0;
+
+// オーディオコンテキスト
 let audioCtx;
 let bgmInterval;
 let beatStep = 0;
@@ -417,15 +416,15 @@ function initAI() {
 function spawnTarget() {
     target.x = 0.1 + Math.random() * 0.8;
     
-    // 🌟 ランダム性を導入 (70%は交互、30%は完全ランダム)
     if (Math.random() < 0.7) {
         spawnTop = !spawnTop; 
     } else {
         spawnTop = Math.random() < 0.5;
     }
 
+    // 🌟 ヘッダーUI（ステータスボックス）と被らないように、少し下から出現させる
     if (spawnTop) {
-        target.y = 0.15 + Math.random() * 0.15; 
+        target.y = 0.25 + Math.random() * 0.15; 
     } else {
         target.y = 0.75 + Math.random() * 0.15; 
     }
@@ -465,23 +464,20 @@ function onResults(results) {
         
         canvasCtx.globalAlpha = isTooClose ? 0.3 : 1.0;
 
-        // 🌟 ゴールドコインのベース
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
-        canvasCtx.fillStyle = '#FFD700'; // ゴールド
+        canvasCtx.fillStyle = '#FFD700'; 
         canvasCtx.fill();
         canvasCtx.lineWidth = 3;
-        canvasCtx.strokeStyle = '#FFA500'; // オレンジのフチ
+        canvasCtx.strokeStyle = '#FFA500'; 
         canvasCtx.stroke();
         
-        // 🌟 コインの内側のリング
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr * 0.7, 0, 2 * Math.PI);
         canvasCtx.lineWidth = 2;
         canvasCtx.strokeStyle = '#FFA500';
         canvasCtx.stroke();
         
-        // 🌟 コインの星マーク（★）
         canvasCtx.save();
         canvasCtx.translate(px, py);
         canvasCtx.scale(-1, 1); 
@@ -493,6 +489,32 @@ function onResults(results) {
         canvasCtx.restore();
         
         canvasCtx.globalAlpha = 1.0;
+    }
+
+    // 🌟【録画用に追加】動画にもスコアとタイムが映るように、キャンバスに直接描画！
+    if (gameState === "PLAYING") {
+        canvasCtx.save();
+        // 文字が反転しないようにキャンバスを一度リセットする
+        canvasCtx.scale(-1, 1);
+        canvasCtx.translate(-canvasElement.width, 0);
+
+        // スコア（左上）
+        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        canvasCtx.fillRect(15, 15, 200, 60);
+        canvasCtx.fillStyle = '#0f0';
+        canvasCtx.font = "bold 30px 'DotGothic16', sans-serif";
+        canvasCtx.textAlign = "left";
+        canvasCtx.fillText("SCORE: " + score, 25, 55);
+
+        // タイム（右上）
+        canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        canvasCtx.fillRect(canvasElement.width - 215, 15, 200, 60);
+        canvasCtx.fillStyle = '#ff0';
+        canvasCtx.font = "bold 30px 'DotGothic16', sans-serif";
+        canvasCtx.textAlign = "right";
+        canvasCtx.fillText("TIME: " + timeLeft, canvasElement.width - 25, 55);
+
+        canvasCtx.restore();
     }
     
     canvasCtx.restore();
@@ -519,6 +541,8 @@ function processGame(landmarks) {
     } 
     else if (gameState === "COUNTDOWN") {
         if (!allVisibleAndInFrame) {
+            // 🌟 枠から出たらカウントダウンを「確実に止める」ように修正！
+            clearInterval(countdownTimer);
             gameState = "CALIBRATING"; 
             msg.style.fontSize = "24px";
             msg.innerText = "枠から出たぞ！もう一度全身を入れて！";
@@ -567,7 +591,6 @@ function processGame(landmarks) {
 function startCountdown() {
     countdownValue = 5;
     const msg = document.getElementById('center_message');
-    // 🌟 カウントダウンを5倍の大きさに
     msg.style.fontSize = "150px"; 
     msg.innerText = countdownValue;
     
@@ -616,13 +639,24 @@ function startGame() {
         console.log("録画エラー: ", err);
     }
     
+    // 🌟 Safariの時間もっさり対策：現実の時計（Date.now）で正確に減算する方式に変更
+    lastUpdateMillis = Date.now();
+    exactTimeLeft = 90.0;
+
     timerInterval = setInterval(() => {
+        let now = Date.now();
+        let deltaTime = (now - lastUpdateMillis) / 1000.0; // 前回チェックからの経過秒数
+        lastUpdateMillis = now;
+
         if (!isTooClose) {
-            timeLeft--;
+            exactTimeLeft -= deltaTime;
+            timeLeft = Math.ceil(exactTimeLeft);
+            if (timeLeft < 0) timeLeft = 0;
+            
             document.getElementById('time_display').innerText = timeLeft;
             if (timeLeft <= 0) finishGame();
         }
-    }, 1000);
+    }, 100); // 0.1秒間隔でチェックするため絶対にもっさりしません
 }
 
 function finishGame() {
@@ -636,11 +670,14 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
-    // 🌟 アクション名を squat_clear に変更（GAS側でこれをキャッチしてAL列に保存してください）
-    fetch(`${GAS_URL}?action=squat_clear&uid=${playId}&pass=${playPass}&score=${score}`)
-        .then(res => res.json())
-        .then(data => {})
-        .catch(err => {});
+    // 🌟 通信トラブルを減らすために安全なURLエンコードを施して送信します
+    const safeId = encodeURIComponent(playId);
+    const safePass = encodeURIComponent(playPass);
+    const requestUrl = `${GAS_URL}?action=squat_clear&uid=${safeId}&pass=${safePass}&score=${score}`;
+
+    fetch(requestUrl)
+        .then(res => { console.log("スコア送信完了！"); })
+        .catch(err => { console.error("通信エラー", err); });
 }
 
 function saveVideo() {
