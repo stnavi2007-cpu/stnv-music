@@ -11,8 +11,9 @@
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
-        #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #video_container { position: relative; width: 100vw; height: 100vh; background: #000; display: none; }
+        /* 🌟修正：object-fit: contain に変更し、無駄なズームを廃止。本来の画質へ。 */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
@@ -22,7 +23,7 @@
         #score_display { font-size: 40px; color: #0f0; text-shadow: 0 0 10px #0f0; font-weight: bold; }
         #time_display { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; font-weight: bold; }
         
-        #msg_area { font-size: 24px; font-weight: bold; padding: 15px; border-radius: 15px; margin-top: 20px; text-shadow: 2px 2px #000; background: rgba(0,0,0,0.7); border: 2px dashed #fff; transition: 0.2s; }
+        #msg_area { font-size: 28px; font-weight: bold; padding: 15px; border-radius: 15px; margin-top: 20px; text-shadow: 2px 2px #000; background: rgba(0,0,0,0.7); border: 3px solid #fff; transition: 0.2s; }
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
         .btn { padding: 15px 30px; background: #f00; color: #fff; border: 2px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; font-size: 20px; cursor: pointer; margin-top: 15px; width: 85%; max-width: 300px; box-shadow: 0 4px #900; pointer-events: auto; }
@@ -40,8 +41,8 @@
     <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
         【ルール】<br>
         ① スマホを壁に立てかけろ！<br>
-        ② 画面に現れるターゲットを直接「手」で殴れ！<br>
-        ③ カメラに近づきすぎるとズル判定で停止するぞ！
+        ② 現れるシルエットの中に綺麗に収まれ！<br>
+        ③ ゲームが始まったら、魔のマークを手で殴れ！
     </div>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
@@ -63,7 +64,7 @@
                 <div id="time_display">30</div>
             </div>
         </div>
-        <div id="msg_area">カメラから全身が映るまで離れろ！</div>
+        <div id="msg_area">シルエットに入れ！</div>
     </div>
 </div>
 
@@ -82,17 +83,21 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
-let gameState = "SETUP"; 
+let gameState = "SETUP"; // SETUP, STANDBY, COUNTDOWN, PLAYING, FINISHED
 let score = 0;
 let timeLeft = 30; 
 let timerInterval;
 
+// 🌟修正：シルエットスタンバイ用の変数
+let standbyTimer = null;
+let standbyCount = 5;
+
 let mediaRecorder, recordedChunks = [];
-// 🌟 拡張子をスマホに合わせて自動で決める変数を追加
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-let target = { x: 0.5, y: 0.5, radius: 0.08, active: false };
+// 🌟修正：魔王のマークを小型化 (0.08 -> 0.05)
+let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
 let playId = "", playPass = "";
 
 function speak(text) {
@@ -106,16 +111,12 @@ function speak(text) {
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
-    
     if(!playId || !playPass) { alert("IDとパスワードを入れてくれ！"); return; }
-
     const unlockUttr = new SpeechSynthesisUtterance("");
     unlockUttr.volume = 0;
     window.speechSynthesis.speak(unlockUttr);
-
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
-
     initAI();
 }
 
@@ -127,61 +128,140 @@ function initAI() {
     pose = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    // 🌟修正：画質・精度向上のため、modelComplexityを 1 に設定
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
     pose.onResults(onResults);
 
     camera = new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
-        width: 1280, height: 720
+        // 🌟修正：普段の内カメラの画質を理想値として設定
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
     });
-    
-    camera.start().catch(err => {
-        alert("カメラの起動に失敗しました。カメラを許可してください！");
-    });
+    camera.start().catch(err => { alert("カメラのエラー！許可してくれ！"); });
 }
 
 function spawnTarget() {
-    target.x = 0.1 + Math.random() * 0.8;
-    target.y = 0.1 + Math.random() * 0.8;
+    target.x = 0.15 + Math.random() * 0.7;
+    target.y = 0.15 + Math.random() * 0.7;
     target.active = true;
 }
 
+// 🌟修正：人型シルエット（点線）を描画する関数
+function drawSilhouette(isReady) {
+    canvasCtx.save();
+    canvasCtx.lineWidth = 8;
+    // 収まったら緑、待機中は黄色い点線
+    if (isReady) {
+        canvasCtx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+        canvasCtx.setLineDash([]);
+    } else {
+        canvasCtx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+        canvasCtx.setLineDash([15, 10]);
+    }
+    
+    const w = canvasElement.width;
+    const h = canvasElement.height;
+    const cx = w / 2;
+    
+    canvasCtx.beginPath();
+    // 頭
+    canvasCtx.arc(cx, h * 0.2, h * 0.08, 0, Math.PI * 2);
+    // 体
+    canvasCtx.moveTo(cx, h * 0.28);
+    canvasCtx.lineTo(cx, h * 0.6);
+    // 腕（前ならえ）
+    canvasCtx.moveTo(cx - w * 0.15, h * 0.4);
+    canvasCtx.lineTo(cx + w * 0.15, h * 0.4);
+    // 脚
+    canvasCtx.moveTo(cx, h * 0.6);
+    canvasCtx.lineTo(cx - w * 0.1, h * 0.85);
+    canvasCtx.moveTo(cx, h * 0.6);
+    canvasCtx.lineTo(cx + w * 0.1, h * 0.85);
+    
+    canvasCtx.stroke();
+    canvasCtx.restore();
+}
+
 function onResults(results) {
+    // 🌟修正：キャンバスの解像度をスマホの画面に合わせる
+    if (canvasElement.width !== videoElement.videoWidth) {
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+    }
+
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
+    // 鏡合わせ
     canvasCtx.translate(canvasElement.width, 0);
     canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-        drawLandmarks(canvasCtx, [results.poseLandmarks[15], results.poseLandmarks[16]], {color: '#FF0000', lineWidth: 5}); 
+        // 🌟修正：顔や体の緑の線を全削除。 drawConnectorsを呼ばない。
+        
+        // 🌟修正：手首（15, 16）のみに赤い光の印を描画
+        const wrists = [results.poseLandmarks[15], results.poseLandmarks[16]];
+        
+        canvasCtx.save();
+        // 镜合わせを考慮して描画
+        for (const wrist of wrists) {
+            canvasCtx.beginPath();
+            // 赤い光の円
+            canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 25, 0, Math.PI * 2);
+            canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.6)'; // 少し透明な赤
+            canvasCtx.fill();
+            // 中央の白い芯
+            canvasCtx.beginPath();
+            canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 10, 0, Math.PI * 2);
+            canvasCtx.fillStyle = 'white';
+            canvasCtx.fill();
+            // グロー効果（影）
+            canvasCtx.shadowColor = 'red';
+            canvasCtx.shadowBlur = 30;
+            canvasCtx.stroke();
+        }
+        canvasCtx.restore();
+
         processGame(results.poseLandmarks);
+    } else {
+        // 人が映っていない時もシルエットは出す
+        if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
+            drawSilhouette(false);
+        }
     }
     
-    if (target.active && gameState !== "FINISHED") {
-        canvasCtx.beginPath();
+    // 魔王ターゲット（魔マーク）の描画
+    if (target.active && gameState === "PLAYING") {
+        canvasCtx.save();
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
-        const pr = target.radius * canvasElement.width;
+        // 🌟修正：半径を小さく設定 (小型化)
+        const pr = 0.05 * canvasElement.width; 
         
+        // 高解像度な円を描画
+        canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
-        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.8)';
         canvasCtx.fill();
-        canvasCtx.lineWidth = 5;
-        canvasCtx.strokeStyle = '#fff';
+        canvasCtx.lineWidth = 6;
+        canvasCtx.strokeStyle = '#fff'; // 白い枠線
         canvasCtx.stroke();
         
+        // 🌟修正：「魔」の文字を高解像度でクリアに描画
         canvasCtx.translate(px, py);
-        canvasCtx.scale(-1, 1); 
+        canvasCtx.scale(-1, 1); // 鏡合わせを文字だけ戻す
         canvasCtx.fillStyle = '#fff';
-        canvasCtx.font = "30px 'DotGothic16'";
+        // 小型化に合わせてフォントサイズを調整。シャドウでクッキリさせる。
+        canvasCtx.font = "bold 40px 'DotGothic16'"; 
         canvasCtx.textAlign = "center";
         canvasCtx.textBaseline = "middle";
+        canvasCtx.shadowColor = '#000';
+        canvasCtx.shadowBlur = 5;
         canvasCtx.fillText("魔", 0, 0);
-        canvasCtx.scale(-1, 1);
-        canvasCtx.translate(-px, -py);
+        
+        canvasCtx.restore();
     }
     
     canvasCtx.restore();
@@ -190,109 +270,131 @@ function onResults(results) {
 function processGame(landmarks) {
     const msg = document.getElementById('msg_area');
     
-    const shoulderDistance = Math.abs(landmarks[11].x - landmarks[12].x);
-    const isTooClose = shoulderDistance > 0.35;
-    
-    if (isTooClose) {
-        msg.innerText = "🚨 近すぎる！もっと離れろ！（ズル判定）";
-        msg.style.color = "#f00";
-        msg.style.borderColor = "#f00";
-        return; 
+    // ズル防止検知（肩幅）はPLAYING中のみ
+    if (gameState === "PLAYING") {
+        const shoulderDistance = Math.abs(landmarks[11].x - landmarks[12].x);
+        if (shoulderDistance > 0.35) {
+            msg.innerText = "🚨 近すぎる！離れろ！";
+            msg.style.color = "#f00";
+            return; 
+        }
     }
 
-    if (gameState === "SETUP") {
-        msg.innerText = "全身が映った！そのまま待機...！";
-        msg.style.color = "#0f0";
-        msg.style.borderColor = "#0f0";
+    // 🌟修正：シルエット・カウントダウンロジック
+    if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
+        // 主要ポイント（頭、両肩、両ヒップ）が画面内に収まっているかチェック
+        const keyPoints = [landmarks[0], landmarks[11], landmarks[12], landmarks[23], landmarks[24]];
+        const isReady = keyPoints.every(p => p.visibility > 0.8 && p.x > 0.2 && p.x < 0.8 && p.y > 0.1 && p.y < 0.9);
         
-        gameState = "PLAYING";
-        spawnTarget();
-        speak("バトルスタート！！");
+        drawSilhouette(isReady);
         
-        // 🌟 スマホ（iPhone/Android）に合わせた最適な形式で録画開始！
-        try {
-            const stream = canvasElement.captureStream(30);
-            
-            let options = {};
-            // iPhone用のMP4を最優先でチェック
-            if (MediaRecorder.isTypeSupported('video/mp4')) {
-                options = { mimeType: 'video/mp4' };
-                videoExtension = 'mp4';
-                videoMimeType = 'video/mp4';
-            } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                options = { mimeType: 'video/webm' };
-                videoExtension = 'webm';
-                videoMimeType = 'video/webm';
+        if (isReady) {
+            if (gameState !== "COUNTDOWN") {
+                // 収まった瞬間、カウントダウン開始
+                gameState = "COUNTDOWN";
+                standbyCount = 5;
+                msg.innerText = standbyCount;
+                msg.style.color = "#ff0";
+                speak("そのまま動くな！ 5");
+                
+                standbyTimer = setInterval(() => {
+                    standbyCount--;
+                    if (standbyCount > 0) {
+                        msg.innerText = standbyCount;
+                        speak(standbyCount);
+                    } else {
+                        // カウントダウン終了、ゲーム開始
+                        clearInterval(standbyTimer);
+                        startGame();
+                    }
+                }, 1000);
             }
-
-            mediaRecorder = new MediaRecorder(stream, options);
-            recordedChunks = [];
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = saveVideo;
-            mediaRecorder.start();
-        } catch(err) {
-            console.log("録画エラー: ", err);
+        } else {
+            // シルエットから外れたらリセット
+            if (gameState === "COUNTDOWN") {
+                clearInterval(standbyTimer);
+                gameState = "STANDBY";
+                speak("動くなと言っただろ！最初からだ！");
+            }
+            msg.innerText = "シルエットに入れ！";
+            msg.style.color = "#fff";
         }
-        
-        timerInterval = setInterval(() => {
-            timeLeft--;
-            document.getElementById('time_display').innerText = timeLeft;
-            if (timeLeft <= 0) finishGame();
-        }, 1000);
     } 
     else if (gameState === "PLAYING") {
-        msg.innerText = "💥 ターゲットを殴れ！ 💥";
+        msg.innerText = "💥 魔を叩け！ 💥";
         msg.style.color = "#fff";
-        msg.style.borderColor = "#0ff";
 
         const distLeft = Math.hypot(landmarks[15].x - target.x, landmarks[15].y - target.y);
         const distRight = Math.hypot(landmarks[16].x - target.x, landmarks[16].y - target.y);
         
-        if (distLeft < target.radius || distRight < target.radius) {
+        // 🌟修正：当たり判定の閾値を小型化したマークに合わせる (0.05)
+        if (distLeft < 0.05 || distRight < 0.05) {
             score++;
             document.getElementById('score_display').innerText = score;
-            
-            const hitSounds = ["ヒット！", "よし！", "ナイス！", "撃破！"];
-            speak(hitSounds[Math.floor(Math.random() * hitSounds.length)]);
-            
+            speak("ヒット！");
             target.active = false;
-            setTimeout(spawnTarget, 300);
+            setTimeout(spawnTarget, 200); // 出現頻度を少し上げる
         }
     }
+}
+
+function startGame() {
+    gameState = "PLAYING";
+    const msg = document.getElementById('msg_area');
+    msg.innerText = "START!!";
+    speak("バトルスタート！！");
+    spawnTarget();
+    
+    // 録画開始
+    try {
+        const stream = canvasElement.captureStream(30);
+        let options = {};
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+            options = { mimeType: 'video/mp4;codecs=h264' };
+            videoExtension = 'mp4';
+            videoMimeType = 'video/mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { mimeType: 'video/mp4' };
+            videoExtension = 'mp4';
+            videoMimeType = 'video/mp4';
+        } else {
+            options = { mimeType: 'video/webm' };
+            videoExtension = 'webm';
+            videoMimeType = 'video/webm';
+        }
+        mediaRecorder = new MediaRecorder(stream, options);
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = saveVideo;
+        mediaRecorder.start();
+    } catch(err) { console.log("録画ミス: ", err); }
+    
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('time_display').innerText = timeLeft;
+        if (timeLeft <= 0) finishGame();
+    }, 1000);
 }
 
 function finishGame() {
     gameState = "FINISHED";
     clearInterval(timerInterval);
-    speak("終了！よくやった！");
-    
+    target.active = false;
+    speak("終了！保存せよ！");
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
     fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${score}`)
         .then(res => res.json())
-        .then(data => {
-            if(data.success) {
-                document.getElementById('save_status').innerText = "通信完了！ポイント獲得！";
-            } else {
-                document.getElementById('save_status').innerText = "エラー: " + data.message;
-            }
-        })
-        .catch(err => {
-            document.getElementById('save_status').innerText = "通信エラー！";
-        });
+        .catch(err => {});
 }
 
-// 🌟 ダウンロード処理を最適化
 function saveVideo() {
-    // 録画したデータと、最初に決めた形式を合わせる
-    const blob = new Blob(recordedChunks, { type: videoMimeType || 'video/mp4' });
+    const blob = new Blob(recordedChunks, { type: videoMimeType });
     const url = URL.createObjectURL(blob);
     const link = document.getElementById('download_link');
     link.href = url;
-    // 拡張子も自動で .mp4 か .webm になる
     link.download = `STNV_AR_BATTLE_${new Date().getTime()}.${videoExtension}`;
     link.style.display = "inline-block"; 
 }
