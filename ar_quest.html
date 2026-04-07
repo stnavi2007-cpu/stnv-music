@@ -15,14 +15,38 @@
             position: relative; 
             width: 100vw; 
             height: 100vh; 
-            background: #111; 
+            background: #000; 
             display: none; 
-            /* 🌟 画面全体を水平反転（ミラー表示）にする */
+        }
+        
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            /* 🌟 ズーム(クロップ)を一ミリもさせない設定 */
+            object-fit: contain; 
+            /* 🌟 画面を水平反転（完全な鏡表示） */
             transform: scaleX(-1); 
         }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        
         video { display: none; }
         
+        /* 🌟 殺人現場の人型点線ガイド（下部に配置） */
+        #body_guide {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            max-height: 60%;
+            opacity: 0.6;
+            pointer-events: none;
+            z-index: 5;
+            display: none;
+        }
+
         .ui-layer { 
             position: absolute; 
             top: 0; 
@@ -36,8 +60,6 @@
             justify-content: space-between; 
             padding: 20px; 
             box-sizing: border-box; 
-            /* UI要素（文字など）は反転させない */
-            transform: scaleX(-1);
         }
         .header { display: flex; justify-content: space-between; align-items: flex-start; }
         .status-box { background: rgba(0,0,0,0.8); border: 2px solid #0ff; padding: 10px; border-radius: 10px; min-width: 100px; box-shadow: 0 0 10px #0ff; }
@@ -76,8 +98,8 @@
     <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
         【ルール】<br>
         ① スマホを壁に立てかけろ！<br>
-        ② 画面に現れるターゲットを直接「手」で殴れ！<br>
-        ③ カメラに近づきすぎるとズル判定で停止するぞ！
+        ② 画面の下にある点線に体を合わせろ！<br>
+        ③ 現れるターゲットを直接「手」で殴れ！
     </div>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
@@ -88,6 +110,8 @@
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
     
+    <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Cpath fill='none' stroke='%230ff' stroke-width='3' stroke-dasharray='6,6' stroke-linecap='round' stroke-linejoin='round' d='M 50 15 C 65 15, 65 40, 50 45 C 70 45, 85 60, 90 90 C 92 105, 80 105, 75 90 C 70 70, 65 70, 65 100 C 65 135, 75 185, 75 195 C 75 200, 60 200, 60 195 C 60 165, 55 125, 50 125 C 45 125, 40 165, 40 195 C 40 200, 25 200, 25 195 C 25 185, 35 135, 35 100 C 35 70, 30 70, 25 90 C 20 105, 8 105, 10 90 C 15 60, 30 45, 50 45 C 35 40, 35 15, 50 15 Z' /%3E%3C/svg%3E">
+
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
@@ -114,35 +138,21 @@
 </div>
 
 <script>
-// ★GASへの送信URL（社長の既存URL）
+// ★GASへの送信URL
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
-let gameState = "SETUP"; // SETUP, PLAYING, FINISHED
+let gameState = "SETUP"; 
 let score = 0;
-// 🌟 タイムリミットを60秒へ変更
-let timeLeft = 60; 
+let timeLeft = 60; // 🌟 60秒
 let timerInterval;
 
-// 録画用の変数
 let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// 🌟 高解像度グラフィック化：人型ガイドの点線
-const guidePngBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAYAAAC6fH5NAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKT2lDQ1BQaG90b3Nob3AgS0NDIFByb2ZpbGUAAHjanVNnVFPgFj333vRCS4iAlEtvUhUIIRETuiBCR8ABYwgKU0VBYkhAnIkmloIUkCjgKKAQUKAYK"; // (実際の点線人型PNGデータをここに貼り付けます)
-const guideImage = new Image();
-guideImage.src = guidePngBase64;
-
-// 🌟 高解像度グラフィック化：「魔」の文字ターゲット
-const maPngBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAYAAACOEfKtAAAACXBIWXMAAAsTAAALEwEAmpwYAAAKOklEQVR4"; // (高解像度の pixelated '魔' 文字PNGデータをここに貼り付けます)
-const maTargetImage = new Image();
-maTargetImage.src = maPngBase64;
-
-// ターゲットのデータ
-// 🌟 魔王のターゲットサイズを小さく設定
+// 🌟 小さめのターゲット設定
 let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
-
 let playId = "", playPass = "";
 
 function speak(text) {
@@ -177,7 +187,7 @@ function initAI() {
     pose = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
-    // 処理を軽くして、手の動きに爆速で追従させる
+    
     pose.setOptions({ 
         modelComplexity: 0, 
         smoothLandmarks: true, 
@@ -188,8 +198,8 @@ function initAI() {
 
     camera = new Camera(videoElement, {
         onFrame: async () => { await pose.send({image: videoElement}); },
-        // 🌟 解像度を高解像度設定へ
-        width: 1920, height: 1080
+        // 広角を維持するための解像度指定
+        width: { ideal: 1280 }, height: { ideal: 720 }
     });
     
     camera.start().catch(err => {
@@ -197,11 +207,9 @@ function initAI() {
     });
 }
 
-// 🌟 強制スクワット：ターゲット出現位置を画面下部にバイアス
 function spawnTarget() {
     target.x = 0.1 + Math.random() * 0.8;
-    // Y座標が0.6より上（画面下部）に出現させることでスクワットを強制
-    target.y = 0.6 + Math.random() * 0.3; 
+    target.y = 0.1 + Math.random() * 0.8;
     target.active = true;
 }
 
@@ -209,14 +217,11 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // 鏡合わせで描画（画面全体の反転と合わせる）
-    canvasCtx.translate(canvasElement.width, 0);
-    canvasCtx.scale(-1, 1);
+    // 画像を描画 (CSSで反転させているのでここでは普通に描画)
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 🌟 体の緑の線を削除（邪魔）
-        // 両手首[15, 16]の赤い点だけでいい
+        // 🌟 緑の線は一切描画しない！ 両手首の赤い点だけ！
         drawLandmarks(canvasCtx, [results.poseLandmarks[15], results.poseLandmarks[16]], {
             color: '#FF0000', 
             lineWidth: 5
@@ -225,62 +230,47 @@ function onResults(results) {
         processGame(results.poseLandmarks);
     }
     
-    // 🎯 🌟 高解像度グラフィック「魔」ターゲットを描画
+    // 🌟 「魔」ターゲットの高画質・ベクター描画
     if (target.active && gameState !== "FINISHED") {
         const px = target.x * canvasElement.width;
         const py = target.y * canvasElement.height;
-        // 🌟 グラフィックを小さく表示
         const pr = target.radius * canvasElement.width;
         
-        // グラフィックが裏返らないように再反転して描画
+        // 赤い円
+        canvasCtx.beginPath();
+        canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
+        canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+        canvasCtx.fill();
+        canvasCtx.lineWidth = 4;
+        canvasCtx.strokeStyle = '#fff';
+        canvasCtx.stroke();
+        
+        // 魔の文字（CSSでキャンバスが反転するので、ここで逆向きに描画して相殺する）
+        canvasCtx.save();
         canvasCtx.translate(px, py);
         canvasCtx.scale(-1, 1); 
-        canvasCtx.drawImage(maTargetImage, -pr, -pr, pr * 2, pr * 2);
-        canvasCtx.scale(-1, 1);
-        canvasCtx.translate(-px, -py);
-    }
-
-    // 🌟 殺人現場人型点線ガイドを画面下部に描画
-    if (gameState === "PLAYING") {
-        const guideW = canvasElement.width * 0.7; // 画面幅の70%
-        const guideH = canvasElement.height * 0.7;
-        // 画面下部に配置
-        const guideX = (canvasElement.width - guideW) / 2;
-        const guideY = canvasElement.height - guideH - (canvasElement.height * 0.05);
-        canvasCtx.globalAlpha = 0.5; // 半透明
-        canvasCtx.drawImage(guideImage, guideX, guideY, guideW, guideH);
-        canvasCtx.globalAlpha = 1.0;
+        canvasCtx.fillStyle = '#fff';
+        canvasCtx.font = `bold ${pr * 1.2}px 'DotGothic16', sans-serif`;
+        canvasCtx.textAlign = "center";
+        canvasCtx.textBaseline = "middle";
+        canvasCtx.fillText("魔", 0, 0);
+        canvasCtx.restore();
     }
     
     canvasCtx.restore();
 }
 
 function processGame(landmarks) {
-    const msg = document.getElementById('msg_area');
-    
-    // ズル防止！「肩幅の距離」を測り、カメラに近づきすぎているかチェック
-    const leftShoulder = landmarks[11];
-    const rightShoulder = landmarks[12];
-    const shoulderDistance = Math.abs(leftShoulder.x - rightShoulder.x);
-    
-    // 肩幅が画面全体の35%以上を占めている＝「カメラに近すぎる（ズル）」
-    const isTooClose = shoulderDistance > 0.35;
-    
-    if (isTooClose) {
-        // 🌟 忠告メッセージを画面全体のUIエリアに移動（下部の赤字を削除）
-        speak("🚨 近すぎる！もっと離れろ！");
-        return; 
-    }
-
     if (gameState === "SETUP") {
         gameState = "PLAYING";
         spawnTarget();
         speak("バトルスタート！！");
         
-        // スマホ（iPhone/Android）に合わせた最適な形式で録画開始！
+        // 🌟 点線ガイドを表示
+        document.getElementById('body_guide').style.display = 'block';
+        
         try {
             const stream = canvasElement.captureStream(30);
-            
             let options = {};
             if (MediaRecorder.isTypeSupported('video/mp4')) {
                 options = { mimeType: 'video/mp4' };
@@ -314,15 +304,13 @@ function processGame(landmarks) {
         const distLeft = Math.hypot(leftWrist.x - target.x, leftWrist.y - target.y);
         const distRight = Math.hypot(rightWrist.x - target.x, rightWrist.y - target.y);
         
-        // 🌟 1ポイント＝1ポイントに設定。触れたターゲットを即座に非アクティブにする
-        if (distLeft < target.radius || distRight < target.radius) {
+        // 🌟 1タップ1ポイント！触れたら即座に消す！
+        if (target.active && (distLeft < target.radius || distRight < target.radius)) {
+            target.active = false; // 先に消して重複防止
             score++;
             document.getElementById('score_display').innerText = score;
-            
             speak("撃破！");
             
-            target.active = false;
-            // 0.3秒後に次のターゲットを出す（移動時間を与える）
             setTimeout(spawnTarget, 300);
         }
     }
@@ -332,34 +320,26 @@ function finishGame() {
     gameState = "FINISHED";
     clearInterval(timerInterval);
     speak("終了！よくやった！");
+
+    document.getElementById('body_guide').style.display = 'none';
     
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
-    // スコアをGASへ送信（既存のアクションを流用）
     fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${score}`)
         .then(res => res.json())
-        .then(data => {
-            if(data.success) {
-                // ...
-            } else {
-                // ...
-            }
-        })
-        .catch(err => {
-            // ...
-        });
+        .then(data => {})
+        .catch(err => {});
 }
 
-// 動画をファイルとしてダウンロード可能にする処理
 function saveVideo() {
     const blob = new Blob(recordedChunks, { type: videoMimeType || 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const link = document.getElementById('download_link');
     link.href = url;
-    link.download = `STNV_AR_BATTLE_${new Date().getTime()}.mp4`;
+    link.download = `STNV_AR_BATTLE_${new Date().getTime()}.${videoExtension}`;
     link.style.display = "inline-block"; 
 }
 </script>
