@@ -12,7 +12,7 @@
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { position: relative; width: 100vw; height: 100vh; background: #000; display: none; }
-        /* 映像は鏡（ミラー）のまま */
+        /* 映像は鏡（ミラー）にする */
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
@@ -35,14 +35,16 @@
 </head>
 <body>
 
+<img id="silhouette_img" src="silhouette.png" style="display:none;">
+
 <div id="start_screen" class="overlay">
     <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR BATTLE QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:14px; margin-top:0;">直感操作で魔王を叩きのめせ！</p>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳(全身)で魔王をぶっ叩け！</p>
     <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
         【ルール】<br>
         ① スマホを床近くの壁に立てかけろ！<br>
-        ② 下に現れる立体シルエットの中に深く収まれ！<br>
-        ③ 1分間、現れる「魔」を左右直感操作で叩け！
+        ② 下に現れるシルエットの中に深く収まれ！<br>
+        ③ 1分間、現れる「魔」を左右ミラー操作で叩け！
     </div>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
@@ -97,7 +99,6 @@ let videoExtension = 'mp4';
 let videoMimeType = '';
 
 let target = { x: 0.5, y: 0.5, radius: 0.05, active: false };
-// 🌟修正：複数カウント防止フラグ
 let canHit = true; 
 let playId = "", playPass = "";
 
@@ -141,75 +142,40 @@ function initAI() {
 }
 
 function spawnTarget() {
-    // 🌟修正：直感操作に合わせて出現範囲を調整。下部に出やすくする。
     target.x = 0.15 + Math.random() * 0.7;
-    target.y = 0.3 + Math.random() * 0.6; // 0.3~0.9の範囲（画面下部）
+    // 🌟修正：出現範囲を調整。下部に出やすくする。
+    target.y = 0.4 + Math.random() * 0.5; // 0.4~0.9の範囲（画面下部）
     target.active = true;
-    canHit = true; // 当たり判定を復活
+    canHit = true;
 }
 
-// 🌟修正：サイバーな立体人型シルエット（小型・下配置）
+// 🌟修正：画像を使ったサイバーな立体人型シルエット（小型・下配置）
 function drawSilhouette(isReady) {
-    canvasCtx.save();
-    canvasCtx.lineWidth = 6;
-    if (isReady) {
-        canvasCtx.strokeStyle = 'rgba(0, 255, 0, 0.9)'; // 収まったら緑
-        canvasCtx.shadowColor = 'lime';
-        canvasCtx.shadowBlur = 20;
-    } else {
-        canvasCtx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; // 待機中はサイバーブルー
-        canvasCtx.setLineDash([10, 5]);
-    }
-    
+    const img = document.getElementById('silhouette_img');
+    if (!img.complete || img.naturalWidth === 0) return; // 画像読み込みチェック
+
     const w = canvasElement.width;
     const h = canvasElement.height;
     const cx = w / 2;
-    
-    // 🌟修正：サイズを小型化し、配置を下に。
-    const scale = 0.7; // 30%小型化
-    const yOffset = h * 0.15; // 下に下げる
 
-    canvasCtx.translate(0, yOffset);
-    canvasCtx.scale(1, scale); // 縦に少し潰して立体感を出す
-    
-    canvasCtx.beginPath();
-    // 頭（六角形っぽく）
-    const r = h * 0.06;
-    for(let i=0; i<6; i++) {
-        const ang = (Math.PI/3) * i;
-        const x = cx + r * Math.sin(ang);
-        const y = h * 0.2 + r * Math.cos(ang);
-        if(i===0) canvasCtx.moveTo(x,y); else canvasCtx.lineTo(x,y);
+    // シルエットの位置とサイズ (下部、小型)
+    const wSilhouette = w * 0.45; // 画面幅の45%
+    const aspectRatio = img.naturalHeight / img.naturalWidth;
+    const hSilhouette = wSilhouette * aspectRatio;
+    const xSilhouette = cx - wSilhouette / 2;
+    // 🌟修正：上部50%を空ける。下部に配置。
+    const ySilhouette = h * 0.5; 
+
+    canvasCtx.save();
+    // 状態に応じてフィルタを適用 (緑色)
+    if (isReady) {
+        canvasCtx.filter = 'drop-shadow(0 0 15px lime) opacity(0.8)';
+    } else {
+        canvasCtx.filter = 'drop-shadow(0 0 10px rgba(0,255,255,0.5)) opacity(0.3)'; // 待機中はサイバーブルー、薄く
     }
-    canvasCtx.closePath();
 
-    // 体・四肢（カクカクした立体デザイン）
-    // 胴体
-    canvasCtx.moveTo(cx - w*0.06, h*0.28);
-    canvasCtx.lineTo(cx + w*0.06, h*0.28);
-    canvasCtx.lineTo(cx + w*0.04, h*0.6);
-    canvasCtx.lineTo(cx - w*0.04, h*0.6);
-    canvasCtx.closePath();
-    
-    // 腕
-    const armY = h * 0.35;
-    canvasCtx.moveTo(cx - w*0.06, h*0.28);
-    canvasCtx.lineTo(cx - w*0.18, armY);
-    canvasCtx.lineTo(cx - w*0.15, armY + h*0.15);
-    
-    canvasCtx.moveTo(cx + w*0.06, h*0.28);
-    canvasCtx.lineTo(cx + w*0.18, armY);
-    canvasCtx.lineTo(cx + w*0.15, armY + h*0.15);
-    
-    // 脚
-    const legY = h * 0.6;
-    canvasCtx.moveTo(cx - w*0.04, legY);
-    canvasCtx.lineTo(cx - w*0.1, h*0.85);
-    
-    canvasCtx.moveTo(cx + w*0.04, legY);
-    canvasCtx.lineTo(cx + w*0.1, h*0.85);
-    
-    canvasCtx.stroke();
+    // 画像を描画
+    canvasCtx.drawImage(img, xSilhouette, ySilhouette, wSilhouette, hSilhouette);
     canvasCtx.restore();
 }
 
@@ -222,25 +188,24 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
+    // 鏡合わせで描画。これで映像自体がミラーになる。
     canvasCtx.translate(canvasElement.width, 0);
     canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 🌟修正：左右直感操作のための革命的なハック！
-        // AIが検知した座標を、プログラム内部でX軸反転させることで、
-        // 「鏡に映る右手を動かせば、画面右側のターゲットが叩ける」ようにする。
-        const landmarks = results.poseLandmarks.map(p => ({
-            ...p,
-            x: 1.0 - p.x // X座標を反転！これぞ直感操作！
-        }));
+        // 🌟修正：左右ミラー操作の完全修正！
+        // ユーザーの「オレが右手あげたら画面の人間は左手があがる」は鏡像（ミラー）表示。
+        // ビデオ自体をCSSとdrawImageでミラーリングしているので、ランドマークはそのまま使う。
+        // ミラー座標に反転させるハックを削除！
+        const landmarks = results.poseLandmarks;
 
         // 手首（15, 16）のみに赤い光の印を描画
-        // 🌟修正：描画位置も反転座標に合わせる
-        const wrists = [landmarks[15], landmarks[16]];
+        const wristIndices = [15, 16];
         
         canvasCtx.save();
-        for (const wrist of wrists) {
+        for (const idx of wristIndices) {
+            const wrist = landmarks[idx];
             canvasCtx.beginPath();
             canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 25, 0, Math.PI * 2);
             canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.6)';
@@ -255,7 +220,7 @@ function onResults(results) {
         }
         canvasCtx.restore();
 
-        // 🌟修正：反転させた座標をゲームロジックに渡す
+        // ゲームロジックに渡す
         processGame(landmarks);
     } else {
         if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
@@ -279,9 +244,8 @@ function onResults(results) {
         canvasCtx.stroke();
         
         canvasCtx.translate(px, py);
-        // 🌟修正：操作は直感だが、文字は鏡合わせで読めるように再反転
-        canvasCtx.scale(1, 1); // ここはミラーのままで文字を出す
-        canvasCtx.scale(-1, 1); // 再反転して読めるように
+        // 操作はミラーだが、文字は読めるように再反転
+        canvasCtx.scale(-1, 1); 
         canvasCtx.fillStyle = '#fff';
         canvasCtx.font = "bold 40px 'DotGothic16'"; 
         canvasCtx.textAlign = "center";
@@ -309,11 +273,17 @@ function processGame(landmarks) {
     }
 
     if (gameState === "SETUP" || gameState === "STANDBY" || gameState === "COUNTDOWN") {
-        // 主要ポイント（頭、両肩、両ヒップ）
-        // 🌟修正：小型シルエットに合わせて判定を厳しく（visibility > 0.9）
-        const keyPoints = [landmarks[0], landmarks[11], landmarks[12], landmarks[23], landmarks[24]];
-        // 🌟修正：配置を下に下げたので、Y座標の判定範囲を下側にずらす (0.3 ~ 1.0)
-        const isReady = keyPoints.every(p => p.visibility > 0.9 && p.x > 0.25 && p.x < 0.75 && p.y > 0.3 && p.y < 1.0);
+        // 主要ポイント（頭[0]、両肩[11,12]、両ヒップ[23,24]、両膝[25,26]）
+        // 🌟修正：シルエット判定の厳格化！可視性チェックを厳しく (visibility > 0.95)
+        const keyPoints = [landmarks[0], landmarks[11], landmarks[12], landmarks[23], landmarks[24], landmarks[25], landmarks[26]];
+        
+        // 🌟修正：判定範囲のパーセンテージ。下部、小型シルエットに合わせる。
+        const xPercentMin = 0.275;
+        const xPercentMax = 0.725;
+        const yPercentMin = 0.5;
+        const yPercentMax = 1.0;
+
+        const isReady = keyPoints.every(p => p.visibility > 0.95 && p.x > xPercentMin && p.x < xPercentMax && p.y > yPercentMin && p.y < yPercentMax);
         
         drawSilhouette(isReady);
         
@@ -352,14 +322,13 @@ function processGame(landmarks) {
         const distLeft = Math.hypot(landmarks[15].x - target.x, landmarks[15].y - target.y);
         const distRight = Math.hypot(landmarks[16].x - target.x, landmarks[16].y - target.y);
         
-        // 🌟修正：複数カウント防止！canHitがtrueの時のみ判定
+        // 複数カウント防止ロジック
         if (canHit && (distLeft < 0.05 || distRight < 0.05)) {
-            canHit = false; // 一回当たったらフラグを折る。これで連打無効。
+            canHit = false; 
             score++;
             document.getElementById('score_display').innerText = score;
             speak("ヒット！");
             target.active = false;
-            // 🌟修正：出現頻度を少し落とす (200 -> 400)。これで直感操作を楽しめる。
             setTimeout(spawnTarget, 400); 
         }
     }
