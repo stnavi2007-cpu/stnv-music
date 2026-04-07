@@ -31,7 +31,7 @@
         
         video { display: none; }
         
-        /* 人型点線ガイド（少し上に移動、サイズを少し大きく） */
+        /* 人型点線ガイド */
         #body_guide {
             position: absolute;
             bottom: 8%; 
@@ -86,13 +86,29 @@
         input { width: 80%; max-width: 300px; padding: 12px; margin: 5px 0; background: #222; color: #fff; border: 1px solid #0ff; text-align: center; font-family: 'DotGothic16'; border-radius: 5px; font-size: 16px; pointer-events: auto; }
         
         #download_link { background: #0ff; color: #000; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; margin-top: 20px; pointer-events: auto; display: none; }
+        
+        /* ズル防止用警告メッセージ */
+        #warning_message {
+            display: none; 
+            position: absolute; 
+            top: 25%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            font-size: 45px; 
+            color: #f00; 
+            text-shadow: 0 0 15px #fff; 
+            z-index: 50; 
+            pointer-events: none; 
+            white-space: nowrap; 
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
     <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR BATTLE QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳と足で魔王をぶっ叩け！</p>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">己の拳で魔王をぶっ叩け！(スクワット必須)</p>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
     <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ BATTLE開始</button>
@@ -105,6 +121,8 @@
     <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Ccircle cx='50' cy='25' r='15' fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' /%3E%3Cpath fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' stroke-linejoin='round' d='M 35 40 L 65 40 L 85 90 L 75 100 L 65 60 L 65 110 L 70 190 L 55 190 L 50 120 L 45 190 L 30 190 L 35 110 L 35 60 L 25 100 L 15 90 Z' /%3E%3C/svg%3E">
 
     <div id="center_message" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:50px; color:#fff; text-shadow:0 0 10px #0ff; z-index:50; pointer-events:none; white-space:nowrap; font-weight:bold;">全身を枠に入れて！</div>
+    
+    <div id="warning_message">近づきすぎ！下がれ！</div>
 
     <div class="ui-layer">
         <div class="header">
@@ -135,7 +153,7 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
 let pose, camera, videoElement, canvasElement, canvasCtx;
-let gameState = "SETUP"; // SETUP -> CALIBRATING -> COUNTDOWN -> PLAYING -> FINISHED
+let gameState = "SETUP"; 
 let score = 0;
 let timeLeft = 60;
 let timerInterval;
@@ -146,17 +164,52 @@ let mediaRecorder, recordedChunks = [];
 let videoExtension = 'mp4'; 
 let videoMimeType = '';
 
-// ターゲットのサイズを少しだけ大きく設定 (0.045)
-let target = { x: 0.5, y: 0.5, radius: 0.045, active: false };
+// 🌟 ターゲットのサイズを少し大きく設定（0.06）
+let target = { x: 0.5, y: 0.5, radius: 0.06, active: false };
 let playId = "", playPass = "";
+let spawnTop = true; // 上下交互に出すためのフラグ
+let isTooClose = false;
 
-// 音声機能はすべて削除しました
+// 🌟 オーディオコンテキスト（コイン音用）
+let audioCtx;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+// 🌟 マリオのコイン風サウンドを生成
+function playCoinSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    osc.type = 'sine';
+    // B5(約987Hz) から E6(約1318Hz) へ素早く切り替え
+    osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); 
+    osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); 
+    
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.3);
+}
 
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
     
     if(!playId || !playPass) { alert("IDとパスワードを入れてくれ！"); return; }
+
+    initAudio(); // ユーザーのアクションでオーディオを初期化
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -199,8 +252,15 @@ function initAI() {
 
 function spawnTarget() {
     target.x = 0.1 + Math.random() * 0.8;
-    // 🌟 Y座標を0.25〜0.95の範囲に変更（上のUIに隠れず、足元にも出現）
-    target.y = 0.25 + Math.random() * 0.7; 
+    
+    // 🌟 上・下をなるべく交互に切り替える
+    if (spawnTop) {
+        target.y = 0.15 + Math.random() * 0.15; // 肩より上（0.15〜0.3）
+    } else {
+        target.y = 0.75 + Math.random() * 0.15; // 足元（0.75〜0.9）
+    }
+    
+    spawnTop = !spawnTop; // フラグを反転
     target.active = true;
 }
 
@@ -216,8 +276,23 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        // 両手首(15,16)と両足首(27,28)の座標を取得
-        const trackedPoints = [15, 16, 27, 28];
+        // 🌟 ズル防止（近づきすぎ判定）
+        const leftShoulder = results.poseLandmarks[11];
+        const rightShoulder = results.poseLandmarks[12];
+        if (leftShoulder && rightShoulder && gameState === "PLAYING") {
+            const shoulderDist = Math.abs(leftShoulder.x - rightShoulder.x);
+            // 肩幅が画面幅の45%を超えたら近づきすぎと判定
+            if (shoulderDist > 0.45) {
+                isTooClose = true;
+                document.getElementById('warning_message').style.display = 'block';
+            } else {
+                isTooClose = false;
+                document.getElementById('warning_message').style.display = 'none';
+            }
+        }
+
+        // 🌟 描画は両手首（15, 16）のみ
+        const trackedPoints = [15, 16];
         
         canvasCtx.fillStyle = '#FF0000';
         trackedPoints.forEach(idx => {
@@ -237,6 +312,9 @@ function onResults(results) {
         const py = target.y * canvasElement.height;
         const pr = target.radius * canvasElement.width;
         
+        // ズルしているときはターゲットを半透明にして取れないアピール
+        canvasCtx.globalAlpha = isTooClose ? 0.3 : 1.0;
+
         canvasCtx.beginPath();
         canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
         canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.8)';
@@ -254,6 +332,8 @@ function onResults(results) {
         canvasCtx.textBaseline = "middle";
         canvasCtx.fillText("魔", 0, pr * 0.1);
         canvasCtx.restore();
+        
+        canvasCtx.globalAlpha = 1.0;
     }
     
     canvasCtx.restore();
@@ -261,7 +341,6 @@ function onResults(results) {
 
 function processGame(landmarks) {
     if (gameState === "CALIBRATING") {
-        // 肩(11,12)と足首(27,28)がすべて画面内に収まっているかチェック
         const pointsToCheck = [landmarks[11], landmarks[12], landmarks[27], landmarks[28]];
         const allVisibleAndInFrame = pointsToCheck.every(pt => 
             pt && pt.visibility > 0.5 && 
@@ -275,9 +354,10 @@ function processGame(landmarks) {
         }
     } 
     else if (gameState === "PLAYING") {
-        const trackedPoints = [15, 16, 27, 28]; // 両手両足
+        const trackedPoints = [15, 16]; // 🌟 タップ判定も手首のみ
         
-        if (target.active) {
+        // ズルをしていない時だけ判定処理を行う
+        if (target.active && !isTooClose) {
             let hit = false;
             trackedPoints.forEach(idx => {
                 const pt = landmarks[idx];
@@ -287,11 +367,11 @@ function processGame(landmarks) {
                 }
             });
 
-            // 1タップ1ポイント完全対応
             if (hit) {
                 target.active = false;
                 score++;
                 document.getElementById('score_display').innerText = score;
+                playCoinSound(); // 🌟 コイン音再生
                 setTimeout(spawnTarget, 200);
             }
         }
@@ -319,7 +399,6 @@ function startGame() {
     gameState = "PLAYING";
     spawnTarget();
     
-    // 録画開始
     try {
         const stream = canvasElement.captureStream(30);
         let options = {};
@@ -342,7 +421,6 @@ function startGame() {
         console.log("録画エラー: ", err);
     }
     
-    // ゲームタイマー開始
     timerInterval = setInterval(() => {
         timeLeft--;
         document.getElementById('time_display').innerText = timeLeft;
@@ -353,6 +431,7 @@ function startGame() {
 function finishGame() {
     gameState = "FINISHED";
     clearInterval(timerInterval);
+    document.getElementById('warning_message').style.display = 'none';
 
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
