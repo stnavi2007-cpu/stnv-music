@@ -9,7 +9,26 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
-        body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
+        
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: 'DotGothic16', sans-serif; 
+            margin: 0; 
+            overflow: hidden; 
+            text-align: center; 
+        }
+        
+        /* 🌟 レトロモニター風の走査線（スキャンライン）エフェクト */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            z-index: 9999;
+            pointer-events: none;
+        }
         
         #video_container { 
             position: relative; 
@@ -39,10 +58,11 @@
             transform: translateX(-50%);
             width: 50%;
             height: 50%;
-            opacity: 0.5;
+            opacity: 0.6;
             pointer-events: none;
             z-index: 5;
             display: none;
+            filter: drop-shadow(0px 0px 5px #0ff); /* ネオングロウを追加 */
         }
 
         .ui-layer { 
@@ -61,26 +81,27 @@
         }
         .header { display: flex; justify-content: space-between; align-items: flex-start; }
         
-        /* 🌟 ステータスボックスを半透明に */
+        /* 🌟 ステータスボックスをレトロRPG風に */
         .status-box { 
-            background: rgba(0,0,0,0.3); 
-            border: 2px solid rgba(0,255,255,0.5); 
-            padding: 10px; 
-            border-radius: 10px; 
+            background: rgba(0, 0, 0, 0.85); 
+            border: 4px solid #0ff; 
+            padding: 10px 15px; 
+            border-radius: 0; /* カクカクにする */
             min-width: 100px; 
-            box-shadow: 0 0 10px rgba(0,255,255,0.5); 
+            box-shadow: 4px 4px 0 #000, inset 0 0 15px rgba(0,255,255,0.3); 
         }
         
-        #score_display { font-size: 40px; color: #0f0; text-shadow: 0 0 10px #0f0; font-weight: bold; }
-        #time_display { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; font-weight: bold; }
+        #score_display { font-size: 45px; color: #0f0; text-shadow: 3px 3px 0 #000, 0 0 10px #0f0; font-weight: bold; }
+        #time_display { font-size: 45px; color: #ff0; text-shadow: 3px 3px 0 #000, 0 0 10px #ff0; font-weight: bold; }
         
+        /* 🌟 背景を少しサイバーな暗がりに */
         .overlay { 
             position: fixed; 
             top: 0; 
             left: 0; 
             width: 100%; 
             height: 100%; 
-            background: rgba(0,0,0,0.95); 
+            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%);
             z-index: 100; 
             display: flex; 
             flex-direction: column; 
@@ -90,13 +111,77 @@
             box-sizing: border-box; 
             text-align: center; 
         }
-        .btn { padding: 15px 30px; background: #f00; color: #fff; border: 2px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; font-size: 20px; cursor: pointer; margin-top: 15px; width: 85%; max-width: 300px; box-shadow: 0 4px #900; pointer-events: auto; }
-        .btn:active { transform: translateY(4px); box-shadow: 0 0 #900; }
-        input { width: 80%; max-width: 300px; padding: 12px; margin: 5px 0; background: #222; color: #fff; border: 1px solid #0ff; text-align: center; font-family: 'DotGothic16'; border-radius: 5px; font-size: 16px; pointer-events: auto; }
         
-        #download_link { background: #0ff; color: #000; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; margin-top: 20px; pointer-events: auto; display: none; }
+        /* 🌟 ボタンを昔のゲーム機風の立体ブロックに */
+        .btn { 
+            padding: 15px 30px; 
+            background: #d32f2f; 
+            color: #fff; 
+            border: 4px solid #fff; 
+            border-radius: 0; 
+            font-family: 'DotGothic16'; 
+            font-size: 22px; 
+            font-weight: bold;
+            cursor: pointer; 
+            margin-top: 25px; 
+            width: 85%; 
+            max-width: 320px; 
+            box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.4), 4px 4px 0px 0px #000, 0 0 15px #f00; 
+            text-shadow: 2px 2px 0 #000;
+            pointer-events: auto; 
+            transition: all 0.1s;
+            text-transform: uppercase;
+        }
+        .btn:active { 
+            transform: translate(4px, 4px); 
+            box-shadow: inset -2px -2px 0px 0px rgba(0,0,0,0.4), 0px 0px 0px 0px #000, 0 0 5px #f00; 
+        }
         
-        /* 🌟 スマホ用にはみ出さないよう文字サイズと幅を調整 */
+        /* 🌟 入力フォームをレトロハッカー風に */
+        input { 
+            width: 80%; 
+            max-width: 300px; 
+            padding: 15px; 
+            margin: 8px 0; 
+            background: #000; 
+            color: #0ff; 
+            border: 3px solid #0ff; 
+            text-align: center; 
+            font-family: 'DotGothic16'; 
+            border-radius: 0; 
+            font-size: 18px; 
+            pointer-events: auto; 
+            box-shadow: 4px 4px 0 #000;
+        }
+        input:focus {
+            outline: none;
+            background: #001a1a;
+            box-shadow: 4px 4px 0 #000, 0 0 10px #0ff;
+        }
+        input::placeholder { color: rgba(0, 255, 255, 0.4); }
+        
+        /* 🌟 ダウンロードボタンを特別なゴールド仕様に */
+        #download_link { 
+            background: #ffb300; 
+            color: #000; 
+            padding: 15px 30px; 
+            border: 4px solid #fff;
+            border-radius: 0; 
+            text-decoration: none; 
+            font-weight: bold; 
+            font-size: 18px;
+            margin-top: 20px; 
+            pointer-events: auto; 
+            display: none; 
+            box-shadow: inset -4px -4px 0px 0px rgba(0,0,0,0.3), 4px 4px 0px 0px #000; 
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.5);
+        }
+        #download_link:active {
+            transform: translate(4px, 4px);
+            box-shadow: inset -2px -2px 0px 0px rgba(0,0,0,0.3), 0px 0px 0px 0px #000;
+        }
+        
+        /* 🌟 メッセージ類をアーケードゲーム風に */
         #center_message, #warning_message {
             position: absolute; 
             top: 40%; 
@@ -114,26 +199,42 @@
         #center_message {
             display: none; 
             color: #fff; 
-            text-shadow: 0 0 10px #0ff; 
+            text-shadow: 4px 4px 0 #000, 0 0 20px #0ff; 
             transition: font-size 0.2s ease;
         }
 
         #warning_message {
             display: none; 
             color: #f00; 
-            text-shadow: 0 0 10px #fff; 
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 10px;
-            border: 2px solid #f00;
+            background: #000;
+            padding: 15px;
+            border-radius: 0;
+            border: 4px solid #f00;
+            box-shadow: 6px 6px 0 #000, 0 0 20px #f00;
+            text-shadow: 2px 2px 0 #000;
+            animation: warningBlink 0.5s infinite alternate;
+        }
+        
+        @keyframes warningBlink {
+            0% { border-color: #f00; box-shadow: 6px 6px 0 #000, 0 0 20px #f00; }
+            100% { border-color: #fff; box-shadow: 6px 6px 0 #000, 0 0 40px #f00; }
+        }
+        
+        /* タイトルの装飾 */
+        h1 {
+            color: #ffd700; 
+            text-shadow: 4px 4px 0 #000, 0 0 15px #f00; 
+            margin-bottom: 5px;
+            font-size: 32px;
+            letter-spacing: 2px;
         }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR SQUATS QUEST 🔥</h1>
-    <p style="color:#0ff; font-size:14px; margin-top:0;">１枚でも多くのコインをタップ！</p>
+    <h1>🔥 AR SQUATS QUEST 🔥</h1>
+    <p style="color:#0ff; font-size:16px; margin-top:0; text-shadow: 2px 2px 0 #000;">１枚でも多くのコインをタップ！</p>
     <input type="text" id="play_id" placeholder="ダンサーID">
     <input type="password" id="play_pass" placeholder="パスワード">
     <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ スクワット開始</button>
@@ -152,11 +253,11 @@
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
-                <div style="font-size:12px; color:#ccc;">COIN GET</div>
+                <div style="font-size:14px; color:#0ff; text-shadow: 1px 1px 0 #000;">COIN GET</div>
                 <div id="score_display">0</div>
             </div>
             <div class="status-box">
-                <div style="font-size:12px; color:#ccc;">TIME LIMIT</div>
+                <div style="font-size:14px; color:#0ff; text-shadow: 1px 1px 0 #000;">TIME LIMIT</div>
                 <div id="time_display">90</div>
             </div>
         </div>
@@ -164,14 +265,14 @@
 </div>
 
 <div id="result_overlay" class="overlay" style="display:none;">
-    <h1 style="color:#ffd700; text-shadow: 0 0 10px #f00;">QUEST FINISHED!!</h1>
-    <div style="font-size:24px; margin-bottom:10px;">獲得したコイン：<span id="final_score" style="color:#0f0; font-size:50px;">0</span> 枚</div>
-    <div id="save_status" style="color:#0ff; margin-bottom:20px;">データ送信中...</div>
+    <h1>QUEST FINISHED!!</h1>
+    <div style="font-size:26px; margin-bottom:10px; text-shadow: 2px 2px 0 #000;">獲得したコイン：<br><span id="final_score" style="color:#0f0; font-size:60px; text-shadow: 4px 4px 0 #000, 0 0 15px #0f0;">0</span> 枚</div>
+    <div id="save_status" style="color:#0ff; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">データ送信中...</div>
     
-    <p style="font-size:14px; color:#ccc;">👇 今回の記録を動画に保存してギルドに提出せよ！</p>
+    <p style="font-size:16px; color:#fff; text-shadow: 2px 2px 0 #000; margin-top: 20px;">👇 今回の記録を動画に保存して<br>ギルドに提出せよ！</p>
     <a id="download_link">🎥 スクワット動画を保存</a>
     
-    <button class="btn" style="background:#333; border-color:#777; margin-top:30px;" onclick="location.reload()">もう一度挑戦</button>
+    <button class="btn" style="background:#555; margin-top:40px;" onclick="location.reload()">もう一度挑戦</button>
 </div>
 
 <script>
