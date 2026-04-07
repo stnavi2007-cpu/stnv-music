@@ -670,14 +670,24 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     document.getElementById('final_score').innerText = score;
     
-    // 🌟 通信トラブルを減らすために安全なURLエンコードを施して送信します
+    // 🌟 URLエンコードして安全な文字にする
     const safeId = encodeURIComponent(playId);
     const safePass = encodeURIComponent(playPass);
     const requestUrl = `${GAS_URL}?action=squat_clear&uid=${safeId}&pass=${safePass}&score=${score}`;
 
-    fetch(requestUrl)
-        .then(res => { console.log("スコア送信完了！"); })
-        .catch(err => { console.error("通信エラー", err); });
+    // 🌟 【最強通信モード】セキュリティ（CORS）を強行突破する設定を追加！
+    fetch(requestUrl, {
+        method: 'GET',
+        mode: 'no-cors' // これを入れるとブラウザが通信をブロックしなくなります
+    })
+    .then(() => { 
+        document.getElementById('save_status').innerText = "データ送信完了！";
+        console.log("スコア送信完了！"); 
+    })
+    .catch(err => { 
+        document.getElementById('save_status').innerText = "通信エラー！";
+        console.error("通信エラー", err); 
+    });
 }
 
 function saveVideo() {
