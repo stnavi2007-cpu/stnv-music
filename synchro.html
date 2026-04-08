@@ -54,7 +54,7 @@
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             font-size: 60px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; /* ボタンを押せるように */
+            white-space: pre-wrap; pointer-events: auto; 
         }
 
         .overlay { 
@@ -76,7 +76,8 @@
 <div id="start_screen" class="overlay">
     <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
     <p style="color:#fff;">まずはカメラを起動します。</p>
-    <button class="btn" onclick="initCamera()">CAMERA START</button>
+    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
+    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
 
 <div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
@@ -118,10 +119,19 @@ let displayScore = 0;
 let scoreHistory = [];
 let hologramOffsetX = +60; 
 
-// 🔊 電子音
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// 🔊 電子音の設定
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
 function playBeep(frequency, duration) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioCtx) return;
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     
@@ -143,44 +153,42 @@ function playBeep(frequency, duration) {
 // Step 1: カメラの起動（最初のボタン）
 // ------------------------------------
 function initCamera() {
-    document.getElementById('start_screen').style.display = 'none';
-    document.getElementById('video_container').style.display = 'block';
-    
-    // カメラのセットアップ
+    document.getElementById('btn_camera_start').style.display = 'none';
+    document.getElementById('loading_msg').style.display = 'block';
+
     const videoElement = document.getElementById('input_video');
     const outputCanvas = document.getElementById('output_canvas');
     canvasCtx = outputCanvas.getContext('2d');
 
+    // 生徒用AIの準備
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     pose.onResults(onUserResults);
 
+    // カメラ起動
     camera = new Camera(videoElement, { 
         onFrame: async () => { await pose.send({image: videoElement}); }, 
         width: 1280, height: 720 
     });
     
-    // カメラが起動したら、第2のスタートボタンを表示
     camera.start().then(() => {
+        // カメラが正常に起動したらUIを切り替える
+        document.getElementById('start_screen').style.display = 'none';
+        document.getElementById('video_container').style.display = 'block';
         document.getElementById('mission_btn_container').style.display = 'block';
         
-        // 先生の動画の準備（裏でロードして最初のポーズで止めておく）
-        tVideo = document.getElementById('teacher_video');
+        // 先生用の準備（動画はまだ再生しない）
         tCanvas = document.getElementById('teacher_canvas');
         tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
-        
+        tVideo = document.getElementById('teacher_video');
+
         teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
         teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
         teacherPose.onResults((results) => { 
             currentTeacherLandmarks = results.poseLandmarks; 
         });
-
-        tVideo.play().then(() => {
-            tVideo.pause();
-            tVideo.currentTime = 0;
-            processChromaKey(); // 動画が止まった状態で描画を開始
-            trackTeacherPose(); // 最初のポーズをAIに読ませる
-        });
+    }).catch(e => {
+        alert("カメラの起動に失敗しました。権限を確認してください。");
     });
 }
 
@@ -188,16 +196,33 @@ function initCamera() {
 // Step 2: ミッションスタート（第2のボタン）
 // ------------------------------------
 function startQuest() {
-    // ボタンを消し、スコアUIを表示
+    // ⚠️ ユーザーアクションの直下で全てのブロックを解除する
+    initAudio(); 
+    tVideo.muted = false;
+
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
-    
+
+    // 動画を一瞬再生して、確実に読み込ませてから一時停止
+    tVideo.play().then(() => {
+        tVideo.pause();
+        tVideo.currentTime = 0;
+        
+        // 描画とAI解析のループを開始
+        processChromaKey(); 
+        trackTeacherPose(); 
+        
+        // カウントダウンへ
+        startCountdown();
+    }).catch(e => {
+        console.error("Video play blocked:", e);
+        alert("動画の再生がブロックされました。もう一度お試しください。");
+    });
+
     tVideo.onended = () => {
         isPlaying = false;
         showResult();
     };
-
-    startCountdown();
 }
 
 function startCountdown() {
@@ -205,6 +230,7 @@ function startCountdown() {
     let count = 8;
     const msg = document.getElementById('msg_overlay');
     
+    // カウントダウン開始
     const timer = setInterval(() => {
         if (count > 0) {
             msg.innerText = `GET READY!\n${count}`;
@@ -216,7 +242,7 @@ function startCountdown() {
             clearInterval(timer);
             msg.innerText = "";
             
-            // ⚠️ 音ズレ防止: 必ず0秒から再生するよう強制
+            // ⚠️ここで本番再生！
             tVideo.currentTime = 0;
             tVideo.play();
             isPlaying = true;
@@ -237,13 +263,13 @@ async function trackTeacherPose() {
 }
 
 function processChromaKey() {
-    if (tVideo.videoWidth > 0) {
+    // ⚠️ 動画が読み込まれていない場合は処理をスキップ（黒塗り防止）
+    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
         if (tCanvas.width !== tVideo.videoWidth) {
             tCanvas.width = tVideo.videoWidth;
             tCanvas.height = tVideo.videoHeight;
         }
         
-        // 動画自体をずらして描画
         tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
         tCtx.drawImage(tVideo, hologramOffsetX, 0, tCanvas.width, tCanvas.height);
         let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
@@ -257,14 +283,17 @@ function processChromaKey() {
         }
         tCtx.putImageData(frame, 0, 0);
 
-        // 🌟 【修正】先生の骨格（点と線）も同じだけズラして描画する
         if (currentTeacherLandmarks) {
-            tCtx.save();
-            // キャンバス全体をOffsetX分だけ移動させてから骨格を描く
-            tCtx.translate(hologramOffsetX, 0);
-            drawConnectors(tCtx, currentTeacherLandmarks, POSE_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-            drawLandmarks(tCtx, currentTeacherLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-            tCtx.restore();
+            let normalizedOffset = hologramOffsetX / tCanvas.width;
+            let offsetLandmarks = currentTeacherLandmarks.map(lm => ({
+                x: lm.x + normalizedOffset,
+                y: lm.y,
+                z: lm.z,
+                visibility: lm.visibility
+            }));
+
+            drawConnectors(tCtx, offsetLandmarks, POSE_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+            drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
         }
     }
     requestAnimationFrame(processChromaKey);
