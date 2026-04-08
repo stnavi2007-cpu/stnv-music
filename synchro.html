@@ -88,7 +88,7 @@
     <h1 style="color:#ff0;">MISSION COMPLETE</h1>
     <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
     <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
-    <button class="btn" onclick="location.reload()">RETRY</button>
+    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
 </div>
 
 <div id="video_container">
@@ -117,7 +117,21 @@ let currentTeacherLandmarks = null;
 let currentUserLandmarks = null;
 let displayScore = 0;
 let scoreHistory = [];
+
+// 位置調整用の変数
 let hologramOffsetX = +60; 
+let hologramOffsetY = +100; // 下に下げる
+
+// カスタム骨格接続（顔は鼻=0のみ、その他は腕・胴体・脚）
+// 目(1〜6)や耳(7,8)への接続を除外
+const CUSTOM_CONNECTIONS = [
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // 腕と肩
+  [11, 23], [12, 24], [23, 24], // 胴体
+  [23, 25], [24, 26], [25, 27], [26, 28], // 脚
+  [27, 31], [28, 32], [27, 29], [28, 30], [29, 31], [30, 32], // 足先
+  [15, 21], [16, 22], [15, 17], [16, 18], [15, 19], [16, 20], [17, 19], [18, 20], // 手先
+  [0, 11], [0, 12] // 鼻から肩へ（簡易的な首）
+];
 
 // 🔊 電子音の設定
 let audioCtx;
@@ -172,12 +186,10 @@ function initCamera() {
     });
     
     camera.start().then(() => {
-        // カメラが正常に起動したらUIを切り替える
         document.getElementById('start_screen').style.display = 'none';
         document.getElementById('video_container').style.display = 'block';
         document.getElementById('mission_btn_container').style.display = 'block';
         
-        // 先生用の準備（動画はまだ再生しない）
         tCanvas = document.getElementById('teacher_canvas');
         tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
         tVideo = document.getElementById('teacher_video');
@@ -187,6 +199,18 @@ function initCamera() {
         teacherPose.onResults((results) => { 
             currentTeacherLandmarks = results.poseLandmarks; 
         });
+
+        // ⚠️ ここで動画を「ミュート」のまま 0.1秒再生して止める（静止画表示）
+        tVideo.muted = true;
+        tVideo.currentTime = 0.1;
+        
+        // 動画のフレームが更新されたら1回だけ描画ループを回す
+        tVideo.addEventListener('seeked', function onSeeked() {
+            processChromaKey(); 
+            trackTeacherPose();
+            tVideo.removeEventListener('seeked', onSeeked);
+        });
+
     }).catch(e => {
         alert("カメラの起動に失敗しました。権限を確認してください。");
     });
@@ -196,33 +220,19 @@ function initCamera() {
 // Step 2: ミッションスタート（第2のボタン）
 // ------------------------------------
 function startQuest() {
-    // ⚠️ ユーザーアクションの直下で全てのブロックを解除する
     initAudio(); 
+    // 音を出せるようにミュート解除
     tVideo.muted = false;
 
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
 
-    // 動画を一瞬再生して、確実に読み込ませてから一時停止
-    tVideo.play().then(() => {
-        tVideo.pause();
-        tVideo.currentTime = 0;
-        
-        // 描画とAI解析のループを開始
-        processChromaKey(); 
-        trackTeacherPose(); 
-        
-        // カウントダウンへ
-        startCountdown();
-    }).catch(e => {
-        console.error("Video play blocked:", e);
-        alert("動画の再生がブロックされました。もう一度お試しください。");
-    });
-
     tVideo.onended = () => {
         isPlaying = false;
         showResult();
     };
+
+    startCountdown();
 }
 
 function startCountdown() {
@@ -230,7 +240,9 @@ function startCountdown() {
     let count = 8;
     const msg = document.getElementById('msg_overlay');
     
-    // カウントダウン開始
+    // カウントダウン中も動画は0.1秒の位置で止めておく
+    tVideo.currentTime = 0.1;
+
     const timer = setInterval(() => {
         if (count > 0) {
             msg.innerText = `GET READY!\n${count}`;
@@ -238,15 +250,17 @@ function startCountdown() {
         } else if (count === 0) {
             msg.innerText = "START!";
             playBeep(1760, 0.4); // ピーー！
+            
+            // ⚠️ここで動画の頭出しと再生を行う（音ズレ防止）
+            tVideo.currentTime = 0;
+            tVideo.play().then(()=>{
+                isPlaying = true;
+                isCounting = false;
+            }).catch(e => console.error("Play error:", e));
+
         } else {
             clearInterval(timer);
             msg.innerText = "";
-            
-            // ⚠️ここで本番再生！
-            tVideo.currentTime = 0;
-            tVideo.play();
-            isPlaying = true;
-            isCounting = false;
         }
         count--;
     }, 1000);
@@ -262,8 +276,19 @@ async function trackTeacherPose() {
     requestAnimationFrame(trackTeacherPose);
 }
 
+// 顔の不要な点を消すフィルター
+function filterFaceLandmarks(landmarks) {
+    if(!landmarks) return null;
+    return landmarks.map((lm, index) => {
+        // 目や耳のインデックス(1〜10)のvisibilityを0にして描画させない
+        if (index >= 1 && index <= 10) {
+            return { ...lm, visibility: 0 };
+        }
+        return lm;
+    });
+}
+
 function processChromaKey() {
-    // ⚠️ 動画が読み込まれていない場合は処理をスキップ（黒塗り防止）
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
         if (tCanvas.width !== tVideo.videoWidth) {
             tCanvas.width = tVideo.videoWidth;
@@ -271,7 +296,8 @@ function processChromaKey() {
         }
         
         tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-        tCtx.drawImage(tVideo, hologramOffsetX, 0, tCanvas.width, tCanvas.height);
+        // 動画をoffsetX, offsetY分ずらして描画
+        tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
         let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
         
         for (let i = 0; i < frame.data.length / 4; i++) {
@@ -284,15 +310,18 @@ function processChromaKey() {
         tCtx.putImageData(frame, 0, 0);
 
         if (currentTeacherLandmarks) {
-            let normalizedOffset = hologramOffsetX / tCanvas.width;
-            let offsetLandmarks = currentTeacherLandmarks.map(lm => ({
-                x: lm.x + normalizedOffset,
-                y: lm.y,
+            let filteredLandmarks = filterFaceLandmarks(currentTeacherLandmarks);
+            let normalizedOffsetX = hologramOffsetX / tCanvas.width;
+            let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+            
+            let offsetLandmarks = filteredLandmarks.map(lm => ({
+                x: lm.x + normalizedOffsetX,
+                y: lm.y + normalizedOffsetY,
                 z: lm.z,
                 visibility: lm.visibility
             }));
 
-            drawConnectors(tCtx, offsetLandmarks, POSE_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+            drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
             drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
         }
     }
@@ -312,8 +341,9 @@ function onUserResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     
     if (currentUserLandmarks) {
-        drawConnectors(canvasCtx, currentUserLandmarks, POSE_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
-        drawLandmarks(canvasCtx, currentUserLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+        let filteredLandmarks = filterFaceLandmarks(currentUserLandmarks);
+        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
     canvasCtx.restore();
     
