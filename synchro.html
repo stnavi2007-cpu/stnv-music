@@ -26,24 +26,18 @@
             position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
         }
         
-        /* 自分のカメラ映像（一番下） */
         #output_canvas { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
-        /* 🌟 先生のホログラム映像（カメラ映像の上に重ねる） */
         #teacher_canvas {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            
-            /* 🌟 ホログラムエフェクト：青緑に光らせ、半透明にする */
             opacity: 0.75;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            
-            /* 🌟 足元フェードアウト：下部20%を徐々に透明にして、見切れた足や床を消し去る！ */
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
@@ -52,57 +46,75 @@
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
-        .status-box { background: rgba(0, 0, 0, 0.5); border: 4px solid rgba(0, 255, 255, 0.6); padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); }
+        .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
         
-        #sync_display { font-size: 50px; color: #0ff; text-shadow: 3px 3px 0 #000, 0 0 15px #0ff; font-weight: bold; }
+        #sync_display { font-size: 50px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
+        #rank_display { font-size: 20px; color: #ff0; }
         
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
-        .btn { padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; text-transform: uppercase; transition: 0.1s;}
+        #msg_overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 60px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
+            white-space: pre-wrap; pointer-events: none;
+        }
+
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
+            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        .btn { 
+            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
+            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
+            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s;
+        }
         .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
-        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; margin-bottom: 10px;}
+        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1>🌌 AR SYNCHRO DANCE 🌌</h1>
-    <p style="color:#fff; font-size:18px;">先生のホログラムと動きをシンクロさせろ！</p>
-    <button class="btn" onclick="startAR()">SYSTEM START</button>
+    <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
+    <p style="color:#fff;">先生のホログラムに角度を合わせろ！</p>
+    <button class="btn" onclick="startQuest()">MISSION START</button>
+</div>
+
+<div id="result_screen" class="overlay" style="display:none;">
+    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
+    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
+    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
+    <button class="btn" onclick="location.reload()">RETRY</button>
 </div>
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
-    <video id="teacher_video" src="sample_dance.mp4" loop playsinline muted preload="auto"></video>    
+    <video id="teacher_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>    
     <canvas id="output_canvas"></canvas>
     <canvas id="teacher_canvas"></canvas>
     
+    <div id="msg_overlay"></div>
+
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
-                <div style="font-size:16px; color:#fff;">SYNCHRO RATE</div>
                 <div id="sync_display">0%</div>
+                <div id="rank_display">-</div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-let pose, teacherPose, camera;
-let videoElement, canvasElement, canvasCtx;
-let tVideo, tCanvas, tCtx;
+let pose, teacherPose, camera, tVideo, tCanvas, tCtx, canvasCtx;
 let isPlaying = false;
-
-// 【新規追加】ホログラムの表示位置を調整するオフセット量
-// 元の動画が右にずれているようなので、負の値で左にずらします。
-// 目分量で -150 に設定しています。様子を見て調整してください。
-let hologramOffsetX = +60; 
-
-// 🌟 骨格データの保存用
+let isCounting = false;
 let currentTeacherLandmarks = null;
 let currentUserLandmarks = null;
-let displayScore = 0; // スコアの滑らかな表示用
+let displayScore = 0;
+let scoreHistory = [];
+let hologramOffsetX = +60; 
 
-function startAR() {
+function startQuest() {
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
     
@@ -110,161 +122,165 @@ function startAR() {
     tCanvas = document.getElementById('teacher_canvas');
     tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
     
+    const outputCanvas = document.getElementById('output_canvas');
+    canvasCtx = outputCanvas.getContext('2d');
+    
     initAI();
 
+    tVideo.onended = () => {
+        isPlaying = false;
+        showResult();
+    };
+
+    startCountdown();
+}
+
+function startCountdown() {
+    isCounting = true;
+    let count = 10;
+    const msg = document.getElementById('msg_overlay');
+    
+    // 最初のフレームで静止
     tVideo.play().then(() => {
-        isPlaying = true;
-        processChromaKey(); // クロマキー起動
-        trackTeacherPose(); // 先生の骨格トラッキング起動
-    }).catch(err => alert("動画の読み込みに失敗しました！URLを確認してください。"));
+        tVideo.pause();
+        tVideo.currentTime = 0;
+    });
+
+    const timer = setInterval(() => {
+        if (count > 0) {
+            msg.innerText = `GET READY!\n${count}`;
+        } else if (count === 0) {
+            msg.innerText = "START!";
+        } else {
+            clearInterval(timer);
+            msg.innerText = "";
+            tVideo.play();
+            isPlaying = true;
+            isCounting = false;
+        }
+        count--;
+    }, 1000);
+
+    processChromaKey();
+    trackTeacherPose();
 }
 
 function initAI() {
-    videoElement = document.getElementById('input_video');
-    canvasElement = document.getElementById('output_canvas');
-    canvasCtx = canvasElement.getContext('2d');
+    const videoElement = document.getElementById('input_video');
 
-    // 👨‍🏫 先生用のAIモデル（動画解析用）
     teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-    teacherPose.onResults((results) => {
-        currentTeacherLandmarks = results.poseLandmarks;
-        updateSyncScore(); // 先生の骨格が出たらスコア更新
+    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    teacherPose.onResults((results) => { 
+        currentTeacherLandmarks = results.poseLandmarks; 
     });
 
-    // 🕺 生徒（カメラ）用のAIモデル
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     pose.onResults(onUserResults);
 
-    // カメラの起動
-    camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
+    camera = new Camera(videoElement, { 
+        onFrame: async () => { await pose.send({image: videoElement}); }, 
+        width: 1280, height: 720 
+    });
     camera.start();
 }
 
-// 🎥 先生の動画から骨格を毎フレーム抽出するループ
 async function trackTeacherPose() {
-    if (!isPlaying) return;
     if (tVideo.readyState >= 2) {
         await teacherPose.send({image: tVideo});
     }
     requestAnimationFrame(trackTeacherPose);
 }
 
-// 🌟 リアルタイム・クロマキー（グリーンバック透過）エンジン
 function processChromaKey() {
-    if (!isPlaying) return;
-    
     if (tVideo.videoWidth > 0) {
         if (tCanvas.width !== tVideo.videoWidth) {
             tCanvas.width = tVideo.videoWidth;
             tCanvas.height = tVideo.videoHeight;
         }
         
-        // 【修正】動画の描画位置にオフセットを追加して、左にずらす
         tCtx.drawImage(tVideo, hologramOffsetX, 0, tCanvas.width, tCanvas.height);
-        
         let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-        let l = frame.data.length / 4;
         
-        for (let i = 0; i < l; i++) {
-            let r = frame.data[i * 4 + 0];
-            let g = frame.data[i * 4 + 1];
-            let b = frame.data[i * 4 + 2];
-            
+        for (let i = 0; i < frame.data.length / 4; i++) {
+            let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
             let diff = g - Math.max(r, b);
             if (diff > 15) { 
-                let alpha = Math.max(0, 255 - (diff * 4));
-                frame.data[i * 4 + 3] = alpha; 
+                frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
             }
         }
         tCtx.putImageData(frame, 0, 0);
+
+        // 🌟 先生の骨格描画（水色）
+        if (currentTeacherLandmarks) {
+            drawConnectors(tCtx, currentTeacherLandmarks, POSE_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+            drawLandmarks(tCtx, currentTeacherLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+        }
     }
     requestAnimationFrame(processChromaKey);
 }
 
-// 🕺 自分のカメラ映像の処理と描画
 function onUserResults(results) {
     currentUserLandmarks = results.poseLandmarks;
-
-    if (canvasElement.width !== results.image.width) {
-        canvasElement.width = results.image.width;
-        canvasElement.height = results.image.height;
+    const canvas = document.getElementById('output_canvas');
+    if (canvas.width !== results.image.width) {
+        canvas.width = results.image.width;
+        canvas.height = results.image.height;
     }
 
     canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     
-    if (results.poseLandmarks) {
-        // 自分の骨格をサイバー風（青色）に描画
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: 'rgba(0, 255, 255, 0.4)', lineWidth: 3});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#0ff', lineWidth: 1, radius: 3});
+    if (currentUserLandmarks) {
+        // 🌟 生徒の骨格描画（ライムグリーン）
+        drawConnectors(canvasCtx, currentUserLandmarks, POSE_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawLandmarks(canvasCtx, currentUserLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
     canvasCtx.restore();
     
-    updateSyncScore(); // 自分の骨格が出たらスコア更新
+    updateScore();
 }
 
-// 📐 3点間の角度を計算する関数（例：肩・ひじ・手首）
 function calculateAngle(a, b, c) {
-    let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-    let angle = Math.abs(radians * 180.0 / Math.PI);
-    if (angle > 180.0) {
-        angle = 360 - angle;
-    }
-    return angle;
+    let rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let deg = Math.abs(rad * 180 / Math.PI);
+    return deg > 180 ? 360 - deg : deg;
 }
 
-// 💯 真のシンクロ率を計算する関数
-function calculateTrueSyncScore(teacher, user) {
-    if (!teacher || !user) return 0;
-
-    // 比較する重要な関節の組み合わせ [中心点, 曲がる点, 先端点]
-    const jointSets = [
-        [11, 13, 15], // 左腕（肩->ひじ->手首）
-        [12, 14, 16], // 右腕（肩->ひじ->手首）
-        [23, 25, 27], // 左脚（股->ひざ->足首）
-        [24, 26, 28], // 右脚（股->ひざ->足首）
-        [11, 23, 25], // 左胴体（肩->股->ひざ）
-        [12, 24, 26]  // 右胴体（肩->股->ひざ）
-    ];
-
-    let totalDifference = 0;
-
-    // 各関節の「角度のズレ」を計算
-    for (let i = 0; i < jointSets.length; i++) {
-        const [p1, p2, p3] = jointSets[i];
-        const teacherAngle = calculateAngle(teacher[p1], teacher[p2], teacher[p3]);
-        const userAngle = calculateAngle(user[p1], user[p2], user[p3]);
-        totalDifference += Math.abs(teacherAngle - userAngle);
-    }
-
-    // 6箇所の平均のズレ（度数）を出す
-    const averageDiff = totalDifference / jointSets.length;
-
-    // ズレ0度 = 100%、ズレ45度以上 = 0% とする厳しいプロ仕様の設定
-    let syncRate = 100 - (averageDiff * 2.22); 
+function updateScore() {
+    if (isCounting || !isPlaying) return;
     
-    if (syncRate < 0) syncRate = 0;
-    if (syncRate > 100) syncRate = 100;
-
-    return syncRate;
-}
-
-// 📊 スコアの表示更新
-function updateSyncScore() {
-    let targetScore = 0;
-    
+    let rawScore = 0;
     if (currentTeacherLandmarks && currentUserLandmarks) {
-        // 先生と自分の骨格が両方画面にいる時だけ計算！
-        targetScore = calculateTrueSyncScore(currentTeacherLandmarks, currentUserLandmarks);
+        const joints = [[11,13,15],[12,14,16],[23,25,27],[24,26,28],[11,23,25],[12,24,26]];
+        let diffSum = 0;
+        joints.forEach(j => {
+            let tA = calculateAngle(currentTeacherLandmarks[j[0]], currentTeacherLandmarks[j[1]], currentTeacherLandmarks[j[2]]);
+            let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
+            diffSum += Math.abs(tA - uA);
+        });
+        rawScore = Math.max(0, 100 - (diffSum / joints.length * 2.2));
+        scoreHistory.push(rawScore);
     }
+
+    displayScore += (rawScore - displayScore) * 0.1;
+    // 5%刻み
+    const stepScore = Math.round(displayScore / 5) * 5;
+    document.getElementById('sync_display').innerText = `${stepScore}%`;
     
-    // スコアがパカパカ切り替わらないように、ヌルッと数値を動かす処理
-    displayScore += (targetScore - displayScore) * 0.15;
-    
-    document.getElementById('sync_display').innerText = Math.round(displayScore) + "%";
+    let rank = "POOR";
+    if (stepScore > 80) rank = "PERFECT!!";
+    else if (stepScore > 60) rank = "GREAT!";
+    else if (stepScore > 40) rank = "GOOD";
+    document.getElementById('rank_display').innerText = rank;
+}
+
+function showResult() {
+    const avg = scoreHistory.length > 0 ? scoreHistory.reduce((a, b) => a + b) / scoreHistory.length : 0;
+    document.getElementById('video_container').style.display = 'none';
+    document.getElementById('result_screen').style.display = 'flex';
+    document.getElementById('final_score').innerText = `${Math.round(avg)}%`;
 }
 </script>
 </body>
