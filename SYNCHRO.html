@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>STNV AR SYNCHRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        
+        body { 
+            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
+            margin: 0; overflow: hidden; text-align: center; 
+        }
+        
+        /* 走査線エフェクト */
+        body::after {
+            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
+        }
+        
+        #video_container { 
+            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
+        }
+        
+        /* 自分のカメラ映像（一番下） */
+        #output_canvas { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; transform: scaleX(-1); z-index: 1; 
+        }
+        
+        /* 🌟 先生のホログラム映像（カメラ映像の上に重ねる） */
+        #teacher_canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; 
+            z-index: 2; 
+            pointer-events: none;
+            
+            /* 🌟 ホログラムエフェクト：青緑に光らせ、半透明にする */
+            opacity: 0.75;
+            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            
+            /* 🌟 足元フェードアウト：下部20%を徐々に透明にして、見切れた足や床を消し去る！ */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+        }
+
+        video { display: none; }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
+        .header { display: flex; justify-content: flex-end; }
+        .status-box { background: rgba(0, 0, 0, 0.5); border: 4px solid rgba(0, 255, 255, 0.6); padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); }
+        
+        #sync_display { font-size: 50px; color: #0ff; text-shadow: 3px 3px 0 #000, 0 0 15px #0ff; font-weight: bold; }
+        
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
+        .btn { padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; text-transform: uppercase; transition: 0.1s;}
+        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
+        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; margin-bottom: 10px;}
+    </style>
+</head>
+<body>
+
+<div id="start_screen" class="overlay">
+    <h1>🌌 AR SYNCHRO DANCE 🌌</h1>
+    <p style="color:#fff; font-size:18px;">先生のホログラムと動きをシンクロさせろ！</p>
+    <button class="btn" onclick="startAR()">SYSTEM START</button>
+</div>
+
+<div id="video_container">
+    <video id="input_video" autoplay playsinline muted></video>
+    <video id="teacher_video" src="https://github.com/stnavi2007-cpu/stnv-music/raw/refs/heads/main/sample_dance.mp4" crossorigin="anonymous" loop playsinline muted preload="auto"></video>
+    
+    <canvas id="output_canvas"></canvas>
+    <canvas id="teacher_canvas"></canvas>
+    
+    <div class="ui-layer">
+        <div class="header">
+            <div class="status-box">
+                <div style="font-size:16px; color:#fff;">SYNCHRO RATE</div>
+                <div id="sync_display">0%</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let pose, camera, videoElement, canvasElement, canvasCtx;
+let tVideo, tCanvas, tCtx;
+let isPlaying = false;
+let dummySyncRate = 0; 
+
+function startAR() {
+    document.getElementById('start_screen').style.display = 'none';
+    document.getElementById('video_container').style.display = 'block';
+    
+    tVideo = document.getElementById('teacher_video');
+    tCanvas = document.getElementById('teacher_canvas');
+    // willReadFrequentlyでピクセル操作を爆速にする
+    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
+    
+    // 先生動画の再生開始
+    tVideo.play().then(() => {
+        isPlaying = true;
+        processChromaKey(); // クロマキーエンジン起動！
+    }).catch(err => alert("動画の読み込みに失敗しました！"));
+
+    initAI();
+}
+
+function initAI() {
+    videoElement = document.getElementById('input_video');
+    canvasElement = document.getElementById('output_canvas');
+    canvasCtx = canvasElement.getContext('2d');
+
+    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    pose.onResults(onResults);
+
+    camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
+    camera.start();
+}
+
+// 🌟 リアルタイム・クロマキー（グリーンバック透過）エンジン
+function processChromaKey() {
+    if (!isPlaying) return;
+    
+    if (tVideo.videoWidth > 0) {
+        if (tCanvas.width !== tVideo.videoWidth) {
+            tCanvas.width = tVideo.videoWidth;
+            tCanvas.height = tVideo.videoHeight;
+        }
+        
+        // 動画の1フレームをキャンバスに描画
+        tCtx.drawImage(tVideo, 0, 0, tCanvas.width, tCanvas.height);
+        
+        // ピクセルデータを取得して、緑色をハッキングする
+        let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
+        let l = frame.data.length / 4;
+        
+        for (let i = 0; i < l; i++) {
+            let r = frame.data[i * 4 + 0];
+            let g = frame.data[i * 4 + 1];
+            let b = frame.data[i * 4 + 2];
+            
+            // 緑成分が赤や青よりどれくらい強いか計算
+            let diff = g - Math.max(r, b);
+            
+            // 閾値（15）以上緑が強ければ、透過処理をかける
+            if (diff > 15) { 
+                // 完全に透明にするのではなく、エッジを滑らかに抜く計算式
+                let alpha = Math.max(0, 255 - (diff * 4));
+                frame.data[i * 4 + 3] = alpha; 
+            }
+        }
+        // 透過したピクセルデータをキャンバスに戻す
+        tCtx.putImageData(frame, 0, 0);
+    }
+    
+    // 次のフレームも処理する（毎秒約30〜60回ループ）
+    requestAnimationFrame(processChromaKey);
+}
+
+function onResults(results) {
+    if (canvasElement.width !== results.image.width) {
+        canvasElement.width = results.image.width;
+        canvasElement.height = results.image.height;
+    }
+
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    // 自分のカメラ映像を描画
+    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    
+    if (results.poseLandmarks) {
+        // 自分の骨格をサイバー風（青色）に描画して、ホログラムと同調させる
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: 'rgba(0, 255, 255, 0.4)', lineWidth: 3});
+        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#0ff', lineWidth: 1, radius: 3});
+        
+        // 🌟 今回のシンクロ率は「プロトタイプ用（ダミー）」です。
+        // 本格的なシンクロ判定は、後日「動画の骨格JSONデータ」を用意して組み込みます。
+        dummySyncRate += (Math.random() * 6 - 2); 
+        if (dummySyncRate > 98) dummySyncRate = 98;
+        if (dummySyncRate < 35) dummySyncRate = 35;
+    } else {
+        dummySyncRate -= 3;
+        if (dummySyncRate < 0) dummySyncRate = 0;
+    }
+    
+    document.getElementById('sync_display').innerText = Math.round(dummySyncRate) + "%";
+    
+    canvasCtx.restore();
+}
+</script>
+</body>
+</html>
