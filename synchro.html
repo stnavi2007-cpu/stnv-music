@@ -42,6 +42,7 @@
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
 
+        /* ⚠️ 自分のカメラ映像（input_video）はmutedのまま。先生の動画（teacher_video）からmutedを削除！ */
         video { display: none; }
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
@@ -75,7 +76,7 @@
 
 <div id="start_screen" class="overlay">
     <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
-    <p style="color:#fff;">先生のホログラムに角度を合わせろ！</p>
+    <p style="color:#fff;">携帯をセットして、STARTボタンを押せ！</p>
     <button class="btn" onclick="startQuest()">MISSION START</button>
 </div>
 
@@ -88,7 +89,7 @@
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
-    <video id="teacher_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>    
+    <video id="teacher_video" src="sample_dance.mp4" playsinline preload="auto"></video>    
     <canvas id="output_canvas"></canvas>
     <canvas id="teacher_canvas"></canvas>
     
@@ -114,6 +115,30 @@ let displayScore = 0;
 let scoreHistory = [];
 let hologramOffsetX = +60; 
 
+// 🔊 電子音を鳴らす関数（ブラウザ標準機能）
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playBeep(frequency, duration) {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    oscillator.type = 'sine'; // 'sine', 'square', 'sawtooth', 'triangle'
+    oscillator.frequency.value = frequency; // 音の高さ
+    
+    // 音の立ち上がりと消え方を少し滑らかにする
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + duration);
+}
+
 function startQuest() {
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -137,7 +162,7 @@ function startQuest() {
 
 function startCountdown() {
     isCounting = true;
-    let count = 10;
+    let count = 8; // 10カウントから8カウントに変更
     const msg = document.getElementById('msg_overlay');
     
     // 最初のフレームで静止
@@ -149,8 +174,10 @@ function startCountdown() {
     const timer = setInterval(() => {
         if (count > 0) {
             msg.innerText = `GET READY!\n${count}`;
+            playBeep(880, 0.1); // ピッ（ラ音、0.1秒）
         } else if (count === 0) {
             msg.innerText = "START!";
+            playBeep(1760, 0.4); // ピーー！（高いラ音、0.4秒）
         } else {
             clearInterval(timer);
             msg.innerText = "";
