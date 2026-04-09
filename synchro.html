@@ -141,6 +141,9 @@ let userMotionWindow = [];
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
+let currentTurn = 0;
+let isStudentTurn = false;
+
 const CAMERA_LAG_OFFSET = 0.2; 
 
 const CUSTOM_CONNECTIONS = [
@@ -248,10 +251,30 @@ function startQuest() {
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
 
+    currentTurn = 0;
+    isStudentTurn = false;
+
     tAudio.onended = () => {
-        isPlaying = false;
-        tVideo.pause();
-        showResult();
+        if (!isPlaying) return;
+        
+        currentTurn++;
+        if (currentTurn >= 8) {
+            isPlaying = false;
+            tVideo.pause();
+            showResult();
+            return;
+        }
+
+        isStudentTurn = (currentTurn % 2 !== 0);
+
+        tVideo.currentTime = 0;
+        tAudio.currentTime = 0;
+        
+        tVideo.play().then(() => {
+            setTimeout(() => {
+                if (isPlaying) tAudio.play().catch(e => console.error("Play error:", e));
+            }, CAMERA_LAG_OFFSET * 1000); 
+        }).catch(e => console.error("Play error:", e));
     };
 
     startCountdown();
@@ -447,9 +470,6 @@ function updateScore() {
         document.getElementById('turn_display').innerText = "";
         return;
     }
-
-    let turnIndex = Math.floor(tAudio.currentTime / 3.0);
-    let isStudentTurn = (turnIndex % 2 !== 0);
 
     if (isStudentTurn) {
         document.getElementById('turn_display').innerText = "YOUR TURN!!";
