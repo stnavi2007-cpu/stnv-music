@@ -15,12 +15,6 @@
             margin: 0; overflow: hidden; text-align: center; 
         }
         
-        body::after {
-            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
-        }
-        
         #video_container { 
             position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
         }
@@ -35,11 +29,10 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.45;
-            transition: opacity 0.3s;
+            opacity: 0.75;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
 
         video, audio { 
@@ -526,27 +519,21 @@ function updateScore() {
         let teacherTotalMotion = calculateTotalMotion(teacherMotionWindow);
         let userTotalMotion = calculateTotalMotion(userMotionWindow);
         
-        // 🌟 1. 棒立ち＆デタラメを完全0点にするペナルティ
         let motionPenalty = 1.0;
-        if (teacherTotalMotion > 0.5) { 
+        if (teacherTotalMotion > 0.8) { 
             let motionRatio = userTotalMotion / teacherTotalMotion;
-            if (motionRatio < 0.3) { 
-                motionPenalty = 0; // 棒立ち: 0点
-            } else if (motionRatio > 2.5) {
-                motionPenalty = 0; // デタラメ: 0点
-            } else {
-                if (motionRatio < 0.7) motionPenalty = Math.max(0, (motionRatio - 0.3) / 0.4);
-                else if (motionRatio > 1.5) motionPenalty = Math.max(0, (2.5 - motionRatio) / 1.0);
+            if (motionRatio < 0.5) { 
+                motionPenalty = Math.max(0.1, motionRatio * 1.5); 
+            } else if (motionRatio > 1.8) {
+                motionPenalty = Math.max(0.1, 1.5 / motionRatio);
             }
         } else {
-            if (userTotalMotion > 1.0) {
-                motionPenalty = 0; // 先生停止中に動いたら0点
+            if (userTotalMotion > 1.5) {
+                motionPenalty = 0.2; 
             }
         }
 
-        // 🌟 2. 動いていない部位を計算から除外する
         let jointWeights = {};
-        let isTeacherMoving = false;
         EVAL_INDICES.forEach(i => {
             let minX = 999, maxX = -999, minY = 999, maxY = -999;
             teacherMotionWindow.forEach(pastPose => {
@@ -559,10 +546,7 @@ function updateScore() {
                 }
             });
             let motion = Math.hypot(maxX - minX, maxY - minY);
-            // ノイズレベルのブレ（0.05未満）ならウェイトを0にする
-            let weight = motion > 0.05 ? motion : 0; 
-            jointWeights[i] = weight;
-            if (weight > 0) isTeacherMoving = true;
+            jointWeights[i] = Math.max(0.1, Math.min(1.0, motion / 0.2)); 
         });
 
         let bestScore = 0;
@@ -572,45 +556,37 @@ function updateScore() {
         const LEG_INDICES = [23, 24, 25, 26, 27, 28];
         const BODY_INDICES = [0, 11, 12, 23, 24];
 
-        if (isTeacherMoving && motionPenalty > 0) {
-            teacherHistory.forEach(pastTeacher => {
-                let tNorm = getNormalizedJoints(pastTeacher);
-                if (!tNorm) return;
+        teacherHistory.forEach(pastTeacher => {
+            let tNorm = getNormalizedJoints(pastTeacher);
+            if (!tNorm) return;
 
-                let calculateGroupScore = (indices) => {
-                    let weightedDiffSum = 0;
-                    let totalWeight = 0;
-                    indices.forEach(i => {
-                        let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                        // 🌟 3. トレース判定を厳しく（遊びは0.05のみ）
-                        let penalizedDiff = Math.max(0, diff - 0.05); 
-                        let weight = jointWeights[i] || 0;
-                        weightedDiffSum += penalizedDiff * weight;
-                        totalWeight += weight;
-                    });
+            let calculateGroupScore = (indices) => {
+                let weightedDiffSum = 0;
+                let totalWeight = 0;
+                indices.forEach(i => {
+                    let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
+                    let penalizedDiff = Math.max(0, diff - 0.1); 
+                    let weight = jointWeights[i] || 0.1;
+                    weightedDiffSum += penalizedDiff * weight;
+                    totalWeight += weight;
+                });
+                let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
+                let errorRatio = Math.min(1.0, avgDiff / 0.4);
+                return 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
+            };
 
-                    // 動いていない部位のスコアは0（全体の加算対象にさせない）
-                    if (totalWeight === 0) return 0;
-
-                    let avgDiff = weightedDiffSum / totalWeight;
-                    // ズレが0.25を超えたら即0点
-                    let errorRatio = Math.min(1.0, avgDiff / 0.25);
-                    return 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
-                };
-
-                let armsScore = calculateGroupScore(ARM_INDICES);
-                let legsScore = calculateGroupScore(LEG_INDICES);
-                let bodyScore = calculateGroupScore(BODY_INDICES);
-                let tempOverall = calculateGroupScore(EVAL_INDICES);
-                
-                if (tempOverall > bestScore) {
-                    bestScore = tempOverall;
-                    bestPartScores.arms = armsScore;
-                    bestPartScores.legs = legsScore;
-                    bestPartScores.body = bodyScore;
-                }
-            });
-        }
+            let armsScore = calculateGroupScore(ARM_INDICES);
+            let legsScore = calculateGroupScore(LEG_INDICES);
+            let bodyScore = calculateGroupScore(BODY_INDICES);
+            let tempOverall = calculateGroupScore(EVAL_INDICES);
+            
+            if (tempOverall > bestScore) {
+                bestScore = tempOverall;
+                bestPartScores.arms = armsScore;
+                bestPartScores.legs = legsScore;
+                bestPartScores.body = bodyScore;
+            }
+        });
 
         rawScore = bestScore * motionPenalty;
         
