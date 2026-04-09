@@ -15,12 +15,6 @@
             margin: 0; overflow: hidden; text-align: center; 
         }
         
-        body::after {
-            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
-        }
-        
         #video_container { 
             position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
         }
@@ -35,7 +29,7 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.45; /* 絶妙な不透明度 */
+            opacity: 0.45;
             transition: opacity 0.3s;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
@@ -146,9 +140,8 @@ let currentUserLandmarks = null;
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 🌟 動画の長さを基準にしたターン長（ロード時に自動取得）
-let turnDuration = 3.0; // デフォルト。後で動画の長さで上書きされる
-let gameState = 'INIT'; // INIT, COUNTDOWN, TEACHER, PLAYER, EVAL, END
+let turnDuration = 3.0; 
+let gameState = 'INIT'; 
 
 const PARTS = {
     HEAD: [0],
@@ -165,7 +158,7 @@ let playerTurnData = [];
 let totalScores = [];
 let partScores = { HEAD: [], L_ARM: [], R_ARM: [], BODY: [], LEGS: [] };
 let turnCount = 0;
-const MAX_TURNS = 4; // 先生→生徒 を何セット繰り返すか（任意で変更可）
+const MAX_TURNS = 4; 
 
 let beepCtx;
 function initBeepAudio() {
@@ -206,7 +199,6 @@ function initCamera() {
     tVideo = document.getElementById('teacher_video');
     tAudio = document.getElementById('bgm_audio'); 
 
-    // 🌟 動画の長さを取得してターンの長さを決定
     tVideo.onloadedmetadata = () => {
         if (tVideo.duration > 0) {
             turnDuration = tVideo.duration;
@@ -225,15 +217,7 @@ function initCamera() {
 
     tVideo.muted = true;
     tVideo.playsInline = true;
-    tVideo.play().then(() => {
-        tVideo.pause();
-        tVideo.currentTime = 0.5; 
-        processChromaKey();
-        trackTeacherPose();
-    }).catch(e => {
-        console.error(e);
-        processChromaKey(); 
-    });
+    // 最初の読み込み時の再生をやめて、スタート時にのみ再生するよう変更（ラグ軽減）
 
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -274,11 +258,9 @@ function startCountdown() {
 
     const timer = setInterval(() => {
         if (count > 0) {
-            msg.innerText = `READY\n${count}`;
-            playBeep(880, 0.1); 
+            msg.innerText = count;
         } else if (count === 0) {
-            msg.innerText = "START!";
-            playBeep(1760, 0.4); 
+            msg.innerText = "START";
             clearInterval(timer);
             setTimeout(() => {
                 msg.innerText = "";
@@ -297,16 +279,13 @@ function startTeacherTurn() {
 
     gameState = 'TEACHER';
     teacherTurnData = []; 
-    document.getElementById('msg_overlay').innerText = "WATCH!";
-    document.getElementById('msg_overlay').style.color = "#0ff";
-    tCanvas.style.opacity = "0.75"; 
+    tCanvas.style.opacity = "0.45"; 
 
     tVideo.currentTime = 0;
     tAudio.currentTime = 0;
     tVideo.play();
     tAudio.play();
 
-    // 動画が終了したら生徒のターンへ（durationを利用）
     setTimeout(() => {
         tVideo.pause();
         tAudio.pause();
@@ -317,14 +296,11 @@ function startTeacherTurn() {
 function startPlayerTurn() {
     gameState = 'PLAYER';
     playerTurnData = []; 
-    document.getElementById('msg_overlay').innerText = "YOUR\nTURN!";
-    document.getElementById('msg_overlay').style.color = "#f0f";
     tCanvas.style.opacity = "0.15"; 
 
-    // 動画の長さを4等分してメトロノームを鳴らす
     let interval = (turnDuration * 1000) / 4;
     let beats = 1;
-    playBeep(1000, 0.05); // 1拍目
+    playBeep(1000, 0.05); 
     
     let metronome = setInterval(() => {
         playBeep(1000, 0.05);
@@ -332,13 +308,11 @@ function startPlayerTurn() {
         if(beats >= 4) clearInterval(metronome);
     }, interval);
 
-    // ターン終了時に採点へ
     setTimeout(() => {
         evaluateTurn();
     }, turnDuration * 1000);
 }
 
-// 🌟 総運動量を計算する関数
 function calculateTotalMotion(dataArray) {
     if (dataArray.length < 5) return 0;
     let totalMotion = 0;
@@ -357,15 +331,13 @@ function calculateTotalMotion(dataArray) {
     return totalMotion;
 }
 
-// 🌟 時間軸に沿ったフレームごとの厳密な採点（デタラメ＆棒立ちを完全排除）
 function evaluateTurn() {
     gameState = 'EVAL';
-    document.getElementById('msg_overlay').innerText = "";
 
     let finalTurnScore = 0;
     let finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
-    // 🌟 誰も映っていない（データが極端に少ない）場合は問答無用で0点
+    // 🌟 誰も映っていない・データが少なすぎる場合は全て0点（MISS）
     if (teacherTurnData.length > 5 && playerTurnData.length > 10) {
         
         let N = teacherTurnData.length;
@@ -373,11 +345,9 @@ function evaluateTurn() {
         let totalScoreSum = 0;
         let partScoreSums = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
-        // 時間軸（フレーム）ごとに採点
         for (let i = 0; i < N; i++) {
             let tPose = teacherTurnData[i];
             
-            // 生徒のデータから、同じタイミング（±15%のズレ許容）のフレームを探す
             let j_center = Math.floor(i * (M / N));
             let window = Math.max(3, Math.floor(M * 0.15)); 
             let j_start = Math.max(0, j_center - window);
@@ -397,7 +367,6 @@ function evaluateTurn() {
                     indices.forEach(idx => {
                         if(tPose[idx] && uPose[idx]) {
                             let diff = Math.hypot(tPose[idx].x - uPose[idx].x, tPose[idx].y - uPose[idx].y);
-                            // 🌟 ズレが0.4（胴体の40%）以上なら0点になる厳しいカーブ
                             let errorRatio = Math.min(1.0, diff / 0.4);
                             let point = 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
                             partDiffSum += point;
@@ -421,31 +390,25 @@ function evaluateTurn() {
             }
         }
 
-        // フレームごとの平均点がベーススコア
         finalTurnScore = totalScoreSum / N;
         for (const part in PARTS) {
             finalPartScores[part] = partScoreSums[part] / N;
         }
 
-        // 🌟 棒立ち（サボり）ペナルティの適用
         let teacherTotalMotion = calculateTotalMotion(teacherTurnData);
         let userTotalMotion = calculateTotalMotion(playerTurnData);
         
         if (teacherTotalMotion > 1.0) { 
             let motionRatio = userTotalMotion / teacherTotalMotion;
             if (motionRatio < 0.4) { 
-                // 先生の40%以下しか動いていなければ、スコアを大幅減額
                 let penalty = Math.max(0.0, motionRatio * 2.0);
                 finalTurnScore *= penalty;
                 for (const part in PARTS) finalPartScores[part] *= penalty;
             }
         }
-    } else {
-        // 誰もいない場合は0点のまま
-        console.log("Player not detected or insufficient data. Score = 0");
     }
 
-    // 記録と表示
+    // 0点処理（誰もいない時）もここで記録される
     totalScores.push(finalTurnScore);
     for (const part in PARTS) {
         partScores[part].push(finalPartScores[part]);
@@ -455,7 +418,7 @@ function evaluateTurn() {
     turnCount++;
     setTimeout(() => {
         startTeacherTurn();
-    }, 1500); // 1.5秒スコアを見せてから次のターンへ
+    }, 1500); 
 }
 
 function endGame() {
@@ -491,7 +454,7 @@ const DRAW_CONNECTIONS = [
 
 let lastChromaTime = -1;
 function processChromaKey() {
-    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
+    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0 && gameState === 'TEACHER') {
         if (tVideo.currentTime !== lastChromaTime) {
             lastChromaTime = tVideo.currentTime;
             
@@ -529,6 +492,8 @@ function processChromaKey() {
                 drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
             }
         }
+    } else if (gameState !== 'TEACHER') {
+        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
     }
     requestAnimationFrame(processChromaKey);
 }
@@ -543,55 +508,4 @@ function onUserResults(results) {
 
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    
-    if (currentUserLandmarks) {
-        if (gameState === 'PLAYER') {
-            playerTurnData.push(getNormalizedJoints(currentUserLandmarks));
-        }
-
-        let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
-        drawConnectors(canvasCtx, filteredLandmarks, DRAW_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
-        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-    }
-    canvasCtx.restore();
-}
-
-function getNormalizedJoints(pose) {
-    if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
-    
-    let midShoulderX = (pose[11].x + pose[12].x) / 2;
-    let midShoulderY = (pose[11].y + pose[12].y) / 2;
-    let midHipX = (pose[23].x + pose[24].x) / 2;
-    let midHipY = (pose[23].y + pose[24].y) / 2;
-    
-    let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
-
-    let normPose = {};
-    ALL_INDICES.forEach(i => {
-        if (pose[i]) {
-            normPose[i] = {
-                x: (pose[i].x - midShoulderX) / torsoLength,
-                y: (pose[i].y - midShoulderY) / torsoLength
-            };
-        }
-    });
-    return normPose;
-}
-
-function showResult() {
-    document.getElementById('video_container').style.display = 'none';
-    document.getElementById('result_screen').style.display = 'flex';
-
-    const totalAvg = totalScores.length > 0 ? totalScores.reduce((a, b) => a + b) / totalScores.length : 0;
-    document.getElementById('final_score').innerText = `${Math.round(totalAvg)}%`;
-
-    for (const part in PARTS) {
-        const pScores = partScores[part];
-        const pAvg = pScores.length > 0 ? pScores.reduce((a, b) => a + b) / pScores.length : 0;
-        document.getElementById(`res_${part.toLowerCase()}`).innerText = `${Math.round(pAvg)}%`;
-    }
-}
-</script>
-</body>
-</html>
+    canvasCtx.drawImage(results.image, 0,
