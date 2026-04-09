@@ -514,40 +514,44 @@ function updateScore() {
     if (teacherHistory.length > 0 && currentUserLandmarks && teacherMotionWindow.length > 10 && userMotionWindow.length > 10) {
         
         let uNorm = getNormalizedJoints(currentUserLandmarks);
-        if (!uNorm) return;
-
-        let teacherTotalMotion = calculateTotalMotion(teacherMotionWindow);
-        let userTotalMotion = calculateTotalMotion(userMotionWindow);
+        let uPastNorm = getNormalizedJoints(userMotionWindow[0]);
+        let tPastNorm = getNormalizedJoints(teacherMotionWindow[0]);
+        let tCurrForVec = getNormalizedJoints(teacherMotionWindow[teacherMotionWindow.length - 1]);
         
-        let motionPenalty = 1.0;
-        if (teacherTotalMotion > 0.8) { 
-            let motionRatio = userTotalMotion / teacherTotalMotion;
-            if (motionRatio < 0.5) { 
-                motionPenalty = Math.max(0.1, motionRatio * 1.5); 
-            } else if (motionRatio > 1.8) {
-                motionPenalty = Math.max(0.1, 1.5 / motionRatio);
-            }
-        } else {
-            if (userTotalMotion > 1.5) {
-                motionPenalty = 0.2; 
-            }
-        }
+        if (!uNorm || !uPastNorm || !tPastNorm || !tCurrForVec) return;
 
         let jointWeights = {};
+        let tVectors = {};
+        let uVectors = {};
+        let totalWeight = 0;
+
         EVAL_INDICES.forEach(i => {
-            let minX = 999, maxX = -999, minY = 999, maxY = -999;
-            teacherMotionWindow.forEach(pastPose => {
-                let n = getNormalizedJoints(pastPose);
-                if (n && n[i]) {
-                    if(n[i].x < minX) minX = n[i].x;
-                    if(n[i].x > maxX) maxX = n[i].x;
-                    if(n[i].y < minY) minY = n[i].y;
-                    if(n[i].y > maxY) maxY = n[i].y;
-                }
-            });
-            let motion = Math.hypot(maxX - minX, maxY - minY);
-            jointWeights[i] = Math.max(0.1, Math.min(1.0, motion / 0.2)); 
+            if (!tCurrForVec[i] || !tPastNorm[i] || !uNorm[i] || !uPastNorm[i]) {
+                jointWeights[i] = 0;
+                return;
+            }
+
+            let tDx = tCurrForVec[i].x - tPastNorm[i].x;
+            let tDy = tCurrForVec[i].y - tPastNorm[i].y;
+            let tMag = Math.hypot(tDx, tDy);
+
+            let uDx = uNorm[i].x - uPastNorm[i].x;
+            let uDy = uNorm[i].y - uPastNorm[i].y;
+            let uMag = Math.hypot(uDx, uDy);
+
+            tVectors[i] = { dx: tDx, dy: tDy, mag: tMag };
+            uVectors[i] = { dx: uDx, dy: uDy, mag: uMag };
+
+            // 動かない点はスコアに入れない（しきい値0.05）
+            let weight = tMag > 0.05 ? tMag : 0; 
+            jointWeights[i] = weight;
+            totalWeight += weight;
         });
+
+        // 全く動いていない瞬間は直前のスコアを維持する（計算スキップ）
+        if (totalWeight < 0.1) {
+            return;
+        }
 
         let bestScore = 0;
         let bestPartScores = { arms: 0, legs: 0, body: 0 };
@@ -561,18 +565,40 @@ function updateScore() {
             if (!tNorm) return;
 
             let calculateGroupScore = (indices) => {
-                let weightedDiffSum = 0;
-                let totalWeight = 0;
+                let weightedScoreSum = 0;
+                let groupTotalWeight = 0;
+
                 indices.forEach(i => {
-                    let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                    let penalizedDiff = Math.max(0, diff - 0.1); 
-                    let weight = jointWeights[i] || 0.1;
-                    weightedDiffSum += penalizedDiff * weight;
-                    totalWeight += weight;
+                    let weight = jointWeights[i];
+                    if (weight === 0 || !tNorm[i] || !uNorm[i]) return;
+
+                    // 位置のズレ (0.0 ~ 1.0)
+                    let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
+                    let posError = Math.min(1.0, posDiff / 0.4);
+
+                    // スピードのズレ (0.0 ~ 1.0) : 棒立ち or 動きすぎ をペナルティ
+                    let tMag = tVectors[i].mag;
+                    let uMag = uVectors[i].mag;
+                    let speedError = Math.min(1.0, Math.abs(tMag - uMag) / Math.max(tMag, 0.001));
+
+                    // 角度のズレ (0.0 ~ 1.0) : 違う方向に動いたらペナルティ
+                    let angleError = 1.0;
+                    if (uMag > 0.01 && tMag > 0.01) {
+                        let dotProduct = tVectors[i].dx * uVectors[i].dx + tVectors[i].dy * uVectors[i].dy;
+                        let cosTheta = dotProduct / (tMag * uMag);
+                        // cosTheta 1(同じ) -> error 0 / cosTheta -1(逆) -> error 1
+                        angleError = Math.max(0, Math.min(1.0, (1 - cosTheta) / 2));
+                    }
+
+                    // エラーのブレンド: 位置30%, 速度35%, 角度35%
+                    let totalError = (posError * 0.3) + (speedError * 0.35) + (angleError * 0.35);
+                    let jointScore = 100 * Math.max(0, 1.0 - Math.pow(totalError, 1.2)); 
+                    
+                    weightedScoreSum += jointScore * weight;
+                    groupTotalWeight += weight;
                 });
-                let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
-                let errorRatio = Math.min(1.0, avgDiff / 0.4);
-                return 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
+
+                return groupTotalWeight > 0 ? (weightedScoreSum / groupTotalWeight) : 0;
             };
 
             let armsScore = calculateGroupScore(ARM_INDICES);
@@ -588,13 +614,13 @@ function updateScore() {
             }
         });
 
-        rawScore = bestScore * motionPenalty;
+        rawScore = bestScore;
         
         if (isStudentTurn) {
             scoreHistory.push(rawScore);
-            scoreHistoryArms.push(bestPartScores.arms * motionPenalty);
-            scoreHistoryLegs.push(bestPartScores.legs * motionPenalty);
-            scoreHistoryBody.push(bestPartScores.body * motionPenalty);
+            scoreHistoryArms.push(bestPartScores.arms);
+            scoreHistoryLegs.push(bestPartScores.legs);
+            scoreHistoryBody.push(bestPartScores.body);
         }
     }
 
