@@ -1,124 +1,124 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV AR SYNCHRO</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
-        
-        body { 
-            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
-            margin: 0; overflow: hidden; text-align: center; 
-        }
-        
-        #video_container { 
-            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
-        }
-        
-        #output_canvas { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; transform: scaleX(-1); z-index: 1; 
-        }
-        
-        #teacher_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; 
-            z-index: 2; 
-            pointer-events: none;
-            opacity: 0.75;
-            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>STNV AR SYNCHRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        
+        body { 
+            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
+            margin: 0; overflow: hidden; text-align: center; 
+        }
+        
+        #video_container { 
+            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
+        }
+        
+        #output_canvas { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; transform: scaleX(-1); z-index: 1; 
+        }
+        
+        #teacher_canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; 
+            z-index: 2; 
+            pointer-events: none;
+            opacity: 0.75;
+            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+        }
 
-        video, audio { 
-            position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
-        }
-        
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
-        .header { display: flex; justify-content: flex-end; }
-        .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 5px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 60px; }
-        
-        #sync_display { font-size: 25px; color: #0ff; text-shadow: 0 0 7px #0ff; font-weight: bold; }
-        #rank_display { font-size: 10px; color: #ff0; }
-        #turn_display { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); font-size: 28px; white-space: nowrap; font-weight: bold; text-shadow: 2px 2px 0 #000, 0 0 10px #fff; z-index: 30; }
-        
-        #msg_overlay { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 80px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; 
-        }
+        video, audio { 
+            position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
+        }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
+        .header { display: flex; justify-content: flex-end; }
+        .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 5px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 60px; }
+        
+        #sync_display { font-size: 25px; color: #0ff; text-shadow: 0 0 7px #0ff; font-weight: bold; }
+        #rank_display { font-size: 10px; color: #ff0; }
+        #turn_display { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); font-size: 28px; white-space: nowrap; font-weight: bold; text-shadow: 2px 2px 0 #000, 0 0 10px #fff; z-index: 30; }
+        
+        #msg_overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 80px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
+            white-space: pre-wrap; pointer-events: auto; 
+        }
 
-        .overlay { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
-            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
-        }
-        .btn { 
-            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
-            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
-            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
-        }
-        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
-        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
-    </style>
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
+            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        .btn { 
+            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
+            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
+            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
+        }
+        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
+        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
+    </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1>AR SYNCHRO QUEST</h1>
-    <p style="color:#fff;">まずはカメラを起動します。</p>
-    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
-    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
+    <h1>AR SYNCHRO QUEST</h1>
+    <p style="color:#fff;">まずはカメラを起動します。</p>
+    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
+    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
 
 <div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
-    <button class="btn" onclick="startQuest()">MISSION START</button>
+    <button class="btn" onclick="startQuest()">MISSION START</button>
 </div>
 
 <div id="result_screen" class="overlay" style="display:none;">
-    <h1 style="color:#ff0; font-size:30px; margin:10px 0;">MISSION COMPLETE</h1>
-    <p style="font-size:20px; margin:0;">TOTAL AVG SYNCHRO</p>
-    <div id="final_score" style="font-size:60px; color:#0ff; margin: 10px 0;">0%</div>
-    
-    <div style="width: 80%; max-width: 280px; font-size: 20px; margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
-            <span>ARMS:</span> <span id="score_arms" style="color:#0f0;">0%</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
-            <span>LEGS:</span> <span id="score_legs" style="color:#0f0;">0%</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
-            <span>BODY:</span> <span id="score_body" style="color:#0f0;">0%</span>
-        </div>
-    </div>
+    <h1 style="color:#ff0; font-size:30px; margin:10px 0;">MISSION COMPLETE</h1>
+    <p style="font-size:20px; margin:0;">TOTAL AVG SYNCHRO</p>
+    <div id="final_score" style="font-size:60px; color:#0ff; margin: 10px 0;">0%</div>
+    
+    <div style="width: 80%; max-width: 280px; font-size: 20px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
+            <span>ARMS:</span> <span id="score_arms" style="color:#0f0;">0%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
+            <span>LEGS:</span> <span id="score_legs" style="color:#0f0;">0%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #0ff; padding: 5px 0;">
+            <span>BODY:</span> <span id="score_body" style="color:#0f0;">0%</span>
+        </div>
+    </div>
 
-    <button class="btn" onclick="window.location.href=window.location.href" style="margin-top:10px;">RETRY</button>
+    <button class="btn" onclick="window.location.href=window.location.href" style="margin-top:10px;">RETRY</button>
 </div>
 
 <div id="video_container">
-    <video id="input_video" autoplay playsinline muted></video>
-    <video id="teacher_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>    
-    <audio id="bgm_audio" src="sample_dance.mp4" preload="auto"></audio>
+    <video id="input_video" autoplay playsinline muted></video>
+    <video id="teacher_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>    
+    <audio id="bgm_audio" src="sample_dance.mp4" preload="auto"></audio>
 
-    <canvas id="output_canvas"></canvas>
-    <canvas id="teacher_canvas"></canvas>
-    
-    <div id="msg_overlay"></div>
-    <div id="turn_display"></div>
+    <canvas id="output_canvas"></canvas>
+    <canvas id="teacher_canvas"></canvas>
+    
+    <div id="msg_overlay"></div>
+    <div id="turn_display"></div>
 
-    <div class="ui-layer">
-        <div class="header">
-            <div class="status-box" id="status_ui" style="display:none;">
-                <div id="sync_display">0%</div>
-                <div id="rank_display">-</div>
-            </div>
-        </div>
-    </div>
+    <div class="ui-layer">
+        <div class="header">
+            <div class="status-box" id="status_ui" style="display:none;">
+                <div id="sync_display">0%</div>
+                <div id="rank_display">-</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -134,366 +134,366 @@ let scoreHistoryArms = [];
 let scoreHistoryLegs = [];
 let scoreHistoryBody = [];
 
-let teacherHistory = []; 
-let teacherMotionWindow = []; 
-let userMotionWindow = []; 
+let teacherHistory = []; 
+let teacherMotionWindow = []; 
+let userMotionWindow = []; 
 
-let hologramOffsetX = +60; 
-let hologramOffsetY = +150; 
+let hologramOffsetX = +60; 
+let hologramOffsetY = +150; 
 
 let currentTurn = 0;
 let isStudentTurn = false;
 
-const CAMERA_LAG_OFFSET = 0.2; 
+const CAMERA_LAG_OFFSET = 0.2; 
 
 const CUSTOM_CONNECTIONS = [
-  [0, 11], [0, 12],
-  [11, 12],
-  [11, 13], [13, 15],
-  [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
-  [23, 25], [25, 27],
-  [24, 26], [26, 28]
+  [0, 11], [0, 12],
+  [11, 12],
+  [11, 13], [13, 15],
+  [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24],
+  [23, 25], [25, 27],
+  [24, 26], [26, 28]
 ];
 
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
 let beepCtx;
 function initBeepAudio() {
-    if (!beepCtx) {
-        beepCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (beepCtx.state === 'suspended') {
-        beepCtx.resume();
-    }
+    if (!beepCtx) {
+        beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (beepCtx.state === 'suspended') {
+        beepCtx.resume();
+    }
 }
 
 function playBeep(frequency, duration) {
-    if (!beepCtx) return;
-    const oscillator = beepCtx.createOscillator();
-    const gainNode = beepCtx.createGain();
-    
-    oscillator.type = 'sine'; 
-    oscillator.frequency.value = frequency; 
-    
-    gainNode.gain.setValueAtTime(0, beepCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(1, beepCtx.currentTime + 0.05);
-    gainNode.gain.linearRampToValueAtTime(0, beepCtx.currentTime + duration);
+    if (!beepCtx) return;
+    const oscillator = beepCtx.createOscillator();
+    const gainNode = beepCtx.createGain();
+    
+    oscillator.type = 'sine'; 
+    oscillator.frequency.value = frequency; 
+    
+    gainNode.gain.setValueAtTime(0, beepCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(1, beepCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(0, beepCtx.currentTime + duration);
 
-    oscillator.connect(gainNode);
-    gainNode.connect(beepCtx.destination);
-    
-    oscillator.start();
-    oscillator.stop(beepCtx.currentTime + duration);
+    oscillator.connect(gainNode);
+    gainNode.connect(beepCtx.destination);
+    
+    oscillator.start();
+    oscillator.stop(beepCtx.currentTime + duration);
 }
 
 function initCamera() {
-    document.getElementById('btn_camera_start').style.display = 'none';
-    document.getElementById('loading_msg').style.display = 'block';
+    document.getElementById('btn_camera_start').style.display = 'none';
+    document.getElementById('loading_msg').style.display = 'block';
 
-    const videoElement = document.getElementById('input_video');
-    const outputCanvas = document.getElementById('output_canvas');
-    canvasCtx = outputCanvas.getContext('2d');
+    const videoElement = document.getElementById('input_video');
+    const outputCanvas = document.getElementById('output_canvas');
+    canvasCtx = outputCanvas.getContext('2d');
 
-    tCanvas = document.getElementById('teacher_canvas');
-    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
-    
-    tVideo = document.getElementById('teacher_video');
-    tAudio = document.getElementById('bgm_audio'); 
+    tCanvas = document.getElementById('teacher_canvas');
+    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
+    
+    tVideo = document.getElementById('teacher_video');
+    tAudio = document.getElementById('bgm_audio'); 
 
-    teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    teacherPose.onResults((results) => { 
-        currentTeacherLandmarks = results.poseLandmarks; 
-        
-        if(results.poseLandmarks) {
-            teacherHistory.push(results.poseLandmarks);
-            if(teacherHistory.length > 3) teacherHistory.shift(); 
+    teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    teacherPose.onResults((results) => { 
+        currentTeacherLandmarks = results.poseLandmarks; 
+        
+        if(results.poseLandmarks) {
+            teacherHistory.push(results.poseLandmarks);
+            if(teacherHistory.length > 3) teacherHistory.shift(); 
 
-            teacherMotionWindow.push(results.poseLandmarks);
-            if(teacherMotionWindow.length > 15) teacherMotionWindow.shift(); 
-        }
-    });
+            teacherMotionWindow.push(results.poseLandmarks);
+            if(teacherMotionWindow.length > 15) teacherMotionWindow.shift(); 
+        }
+    });
 
-    tVideo.muted = true;
-    tVideo.playsInline = true;
-    tVideo.play().then(() => {
-        tVideo.pause();
-        tVideo.currentTime = 0.01; 
-        processChromaKey();
-        trackTeacherPose();
-    }).catch(e => {
-        console.error(e);
-        processChromaKey(); 
-    });
+    tVideo.muted = true;
+    tVideo.playsInline = true;
+    tVideo.play().then(() => {
+        tVideo.pause();
+        tVideo.currentTime = 0.01; 
+        processChromaKey();
+        trackTeacherPose();
+    }).catch(e => {
+        console.error(e);
+        processChromaKey(); 
+    });
 
-    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    pose.onResults(onUserResults);
+    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    pose.onResults(onUserResults);
 
-    camera = new Camera(videoElement, { 
-        onFrame: async () => { await pose.send({image: videoElement}); }, 
-        width: 1280, height: 720 
-    });
-    
-    camera.start().then(() => {
-        document.getElementById('start_screen').style.display = 'none';
-        document.getElementById('video_container').style.display = 'block';
-        document.getElementById('mission_btn_container').style.display = 'block';
-    }).catch(e => {
-        alert("カメラの起動に失敗しました。権限を確認してください。");
-    });
+    camera = new Camera(videoElement, { 
+        onFrame: async () => { await pose.send({image: videoElement}); }, 
+        width: 1280, height: 720 
+    });
+    
+    camera.start().then(() => {
+        document.getElementById('start_screen').style.display = 'none';
+        document.getElementById('video_container').style.display = 'block';
+        document.getElementById('mission_btn_container').style.display = 'block';
+    }).catch(e => {
+        alert("カメラの起動に失敗しました。権限を確認してください。");
+    });
 }
 
 function startQuest() {
-    initBeepAudio(); 
-    
-    document.getElementById('mission_btn_container').style.display = 'none';
-    document.getElementById('status_ui').style.display = 'block';
+    initBeepAudio(); 
+    
+    document.getElementById('mission_btn_container').style.display = 'none';
+    document.getElementById('status_ui').style.display = 'block';
 
-    currentTurn = 0;
-    isStudentTurn = false;
+    currentTurn = 0;
+    isStudentTurn = false;
 
-    tAudio.onended = () => {
-        if (!isPlaying) return;
-        
-        currentTurn++;
-        if (currentTurn >= 8) {
-            isPlaying = false;
-            tVideo.pause();
-            showResult();
-            return;
-        }
+    tAudio.onended = () => {
+        if (!isPlaying) return;
+        
+        currentTurn++;
+        if (currentTurn >= 8) {
+            isPlaying = false;
+            tVideo.pause();
+            showResult();
+            return;
+        }
 
-        isStudentTurn = (currentTurn % 2 !== 0);
+        isStudentTurn = (currentTurn % 2 !== 0);
 
-        tVideo.currentTime = 0;
-        tAudio.currentTime = 0;
-        
-        let currentLag = isStudentTurn ? 0 : CAMERA_LAG_OFFSET;
-        
-        tVideo.play().then(() => {
-            setTimeout(() => {
-                if (isPlaying) {
-                    if (isStudentTurn) {
-                        tAudio.muted = true;
-                        tAudio.volume = 0; 
-                        tAudio.play().catch(e => console.error("Play error:", e));
-                        
-                        let beepCount = 0;
-                        playBeep(880, 0.1); 
-                        beepCount++;
-                        
-                        let beepInterval = setInterval(() => {
-                            if (!isPlaying) { clearInterval(beepInterval); return; }
-                            playBeep(880, 0.1);
-                            beepCount++;
-                            if (beepCount >= 4) clearInterval(beepInterval);
-                        }, 750);
-                    } else {
-                        tAudio.muted = false;
-                        tAudio.volume = 1; 
-                        tAudio.play().catch(e => console.error("Play error:", e));
-                    }
-                }
-            }, currentLag * 1000); 
-        }).catch(e => console.error("Play error:", e));
-    };
+        tVideo.currentTime = 0;
+        tAudio.currentTime = 0;
+        
+        let currentLag = isStudentTurn ? 0 : CAMERA_LAG_OFFSET;
+        
+        tVideo.play().then(() => {
+            setTimeout(() => {
+                if (isPlaying) {
+                    if (isStudentTurn) {
+                        tAudio.muted = true;
+                        tAudio.volume = 0; 
+                        tAudio.play().catch(e => console.error("Play error:", e));
+                        
+                        let beepCount = 0;
+                        playBeep(880, 0.1); 
+                        beepCount++;
+                        
+                        let beepInterval = setInterval(() => {
+                            if (!isPlaying) { clearInterval(beepInterval); return; }
+                            playBeep(880, 0.1);
+                            beepCount++;
+                            if (beepCount >= 4) clearInterval(beepInterval);
+                        }, 750);
+                    } else {
+                        tAudio.muted = false;
+                        tAudio.volume = 1; 
+                        tAudio.play().catch(e => console.error("Play error:", e));
+                    }
+                }
+            }, currentLag * 1000); 
+        }).catch(e => console.error("Play error:", e));
+    };
 
-    startCountdown();
+    startCountdown();
 }
 
 function startCountdown() {
-    isCounting = true;
-    const msg = document.getElementById('msg_overlay');
-    
-    tAudio.muted = true;
-    tAudio.volume = 0;
-    tAudio.play().then(() => {
-        setTimeout(() => {
-            tAudio.pause();
-            tAudio.currentTime = 0;
-            tAudio.muted = false;
-            tAudio.volume = 1;
-        }, 100);
-    });
+    isCounting = true;
+    const msg = document.getElementById('msg_overlay');
+    
+    tAudio.muted = true;
+    tAudio.volume = 0;
+    tAudio.play().then(() => {
+        setTimeout(() => {
+            tAudio.pause();
+            tAudio.currentTime = 0;
+            tAudio.muted = false;
+            tAudio.volume = 1;
+        }, 100);
+    });
 
-    let countdownStartTime = null;
-    let lastCount = -1;
+    let countdownStartTime = null;
+    let lastCount = -1;
 
-    function countdownLoop(now) {
-        if (countdownStartTime === null) countdownStartTime = now;
-        let elapsed = (now - countdownStartTime) / 750;
-        let currentCount = 4 - Math.floor(elapsed);
+    function countdownLoop(now) {
+        if (countdownStartTime === null) countdownStartTime = now;
+        let elapsed = (now - countdownStartTime) / 750;
+        let currentCount = 4 - Math.floor(elapsed);
 
-        if (currentCount > 0) {
-            if (currentCount !== lastCount) {
-                msg.innerText = currentCount;
-                playBeep(880, 0.1); 
-                lastCount = currentCount;
-            }
-            requestAnimationFrame(countdownLoop);
-        } else {
-            msg.innerText = "";
-            
-            tVideo.currentTime = 0;
-            tAudio.currentTime = 0;
-            
-            tVideo.play().then(() => {
-                setTimeout(() => {
-                    tAudio.muted = false;
-                    tAudio.volume = 1;
-                    tAudio.play().then(() => {
-                        isPlaying = true;
-                        isCounting = false;
-                    });
-                }, CAMERA_LAG_OFFSET * 1000); 
-            }).catch(e => console.error("Play error:", e));
-        }
-    }
-    requestAnimationFrame(countdownLoop);
+        if (currentCount > 0) {
+            if (currentCount !== lastCount) {
+                msg.innerText = currentCount;
+                playBeep(880, 0.1); 
+                lastCount = currentCount;
+            }
+            requestAnimationFrame(countdownLoop);
+        } else {
+            msg.innerText = "";
+            
+            tVideo.currentTime = 0;
+            tAudio.currentTime = 0;
+            
+            tVideo.play().then(() => {
+                setTimeout(() => {
+                    tAudio.muted = false;
+                    tAudio.volume = 1;
+                    tAudio.play().then(() => {
+                        isPlaying = true;
+                        isCounting = false;
+                    });
+                }, CAMERA_LAG_OFFSET * 1000); 
+            }).catch(e => console.error("Play error:", e));
+        }
+    }
+    requestAnimationFrame(countdownLoop);
 }
 
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
-    if (tVideo.readyState >= 2) {
-        // 再生直後の0.5秒間は強制補正を止めてカクツキを防止
-        if (isPlaying && tAudio.currentTime > 0.5) {
-            let targetVideoTime = tAudio.currentTime + (isStudentTurn ? 0 : CAMERA_LAG_OFFSET);
-            if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.2) {
-                tVideo.currentTime = targetVideoTime;
-            }
-        }
+    if (tVideo.readyState >= 2) {
+        // 再生直後の0.5秒間は強制補正を止めてカクツキを防止
+        if (isPlaying && tAudio.currentTime > 0.5) {
+            let targetVideoTime = tAudio.currentTime + (isStudentTurn ? 0 : CAMERA_LAG_OFFSET);
+            if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.2) {
+                tVideo.currentTime = targetVideoTime;
+            }
+        }
 
-        if (tVideo.currentTime !== lastTeacherVideoTime) {
-            lastTeacherVideoTime = tVideo.currentTime;
-            await teacherPose.send({image: tVideo});
-        }
-    }
-    requestAnimationFrame(trackTeacherPose);
+        if (tVideo.currentTime !== lastTeacherVideoTime) {
+            lastTeacherVideoTime = tVideo.currentTime;
+            await teacherPose.send({image: tVideo});
+        }
+    }
+    requestAnimationFrame(trackTeacherPose);
 }
 
 function filterEssentialLandmarks(landmarks) {
-    if(!landmarks) return null;
-    return landmarks.map((lm, index) => {
-        if (!EVAL_INDICES.includes(index)) {
-            return { ...lm, visibility: 0 }; 
-        }
-        return lm;
-    });
+    if(!landmarks) return null;
+    return landmarks.map((lm, index) => {
+        if (!EVAL_INDICES.includes(index)) {
+            return { ...lm, visibility: 0 }; 
+        }
+        return lm;
+    });
 }
 
 let lastChromaTime = -1;
 function processChromaKey() {
-    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
-        if (tVideo.currentTime !== lastChromaTime) {
-            lastChromaTime = tVideo.currentTime;
-            
-            if (tCanvas.width !== tVideo.videoWidth) {
-                tCanvas.width = tVideo.videoWidth;
-                tCanvas.height = tVideo.videoHeight;
-            }
-            
-            tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-            
-            if (!isStudentTurn) {
-                tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
-                let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-                
-                for (let i = 0; i < frame.data.length / 4; i++) {
-                    let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
-                    let diff = g - Math.max(r, b);
-                    if (diff > 15) { 
-                        frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
-                    }
-                }
-                tCtx.putImageData(frame, 0, 0);
+    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
+        if (tVideo.currentTime !== lastChromaTime) {
+            lastChromaTime = tVideo.currentTime;
+            
+            if (tCanvas.width !== tVideo.videoWidth) {
+                tCanvas.width = tVideo.videoWidth;
+                tCanvas.height = tVideo.videoHeight;
+            }
+            
+            tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
+            
+            if (!isStudentTurn) {
+                tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
+                let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
+                
+                for (let i = 0; i < frame.data.length / 4; i++) {
+                    let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
+                    let diff = g - Math.max(r, b);
+                    if (diff > 15) { 
+                        frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
+                    }
+                }
+                tCtx.putImageData(frame, 0, 0);
 
-                if (currentTeacherLandmarks) {
-                    let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
-                    let normalizedOffsetX = hologramOffsetX / tCanvas.width;
-                    let normalizedOffsetY = hologramOffsetY / tCanvas.height;
-                    
-                    let offsetLandmarks = filteredLandmarks.map(lm => ({
-                        x: lm.x + normalizedOffsetX,
-                        y: lm.y + normalizedOffsetY,
-                        z: lm.z,
-                        visibility: lm.visibility
-                    }));
+                if (currentTeacherLandmarks) {
+                    let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
+                    let normalizedOffsetX = hologramOffsetX / tCanvas.width;
+                    let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+                    
+                    let offsetLandmarks = filteredLandmarks.map(lm => ({
+                        x: lm.x + normalizedOffsetX,
+                        y: lm.y + normalizedOffsetY,
+                        z: lm.z,
+                        visibility: lm.visibility
+                    }));
 
-                    drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-                    drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-                }
-            }
-        }
-    }
-    requestAnimationFrame(processChromaKey);
+                    drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+                    drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+                }
+            }
+        }
+    }
+    requestAnimationFrame(processChromaKey);
 }
 
 function onUserResults(results) {
-    currentUserLandmarks = results.poseLandmarks;
-    const canvas = document.getElementById('output_canvas');
-    if (canvas.width !== results.image.width) {
-        canvas.width = results.image.width;
-        canvas.height = results.image.height;
-    }
+    currentUserLandmarks = results.poseLandmarks;
+    const canvas = document.getElementById('output_canvas');
+    if (canvas.width !== results.image.width) {
+        canvas.width = results.image.width;
+        canvas.height = results.image.height;
+    }
 
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    
-    if (currentUserLandmarks) {
-        userMotionWindow.push(currentUserLandmarks);
-        if(userMotionWindow.length > 15) userMotionWindow.shift();
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    
+    if (currentUserLandmarks) {
+        userMotionWindow.push(currentUserLandmarks);
+        if(userMotionWindow.length > 15) userMotionWindow.shift();
 
-        let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
-        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
-        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-    }
-    canvasCtx.restore();
-    
-    updateScore();
+        let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
+        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+    }
+    canvasCtx.restore();
+    
+    updateScore();
 }
 
 function getNormalizedJoints(pose) {
-    if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
-    
-    let midShoulderX = (pose[11].x + pose[12].x) / 2;
-    let midShoulderY = (pose[11].y + pose[12].y) / 2;
-    let midHipX = (pose[23].x + pose[24].x) / 2;
-    let midHipY = (pose[23].y + pose[24].y) / 2;
-    
-    let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
+    if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
+    
+    let midShoulderX = (pose[11].x + pose[12].x) / 2;
+    let midShoulderY = (pose[11].y + pose[12].y) / 2;
+    let midHipX = (pose[23].x + pose[24].x) / 2;
+    let midHipY = (pose[23].y + pose[24].y) / 2;
+    
+    let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
 
-    let normPose = {};
-    EVAL_INDICES.forEach(i => {
-        if (pose[i]) {
-            normPose[i] = {
-                x: (pose[i].x - midShoulderX) / torsoLength,
-                y: (pose[i].y - midShoulderY) / torsoLength
-            };
-        }
-    });
-    return normPose;
+    let normPose = {};
+    EVAL_INDICES.forEach(i => {
+        if (pose[i]) {
+            normPose[i] = {
+                x: (pose[i].x - midShoulderX) / torsoLength,
+                y: (pose[i].y - midShoulderY) / torsoLength
+            };
+        }
+    });
+    return normPose;
 }
 
 function calculateTotalMotion(motionWindow) {
-    if (motionWindow.length < 5) return 0;
-    let totalMotion = 0;
-    EVAL_INDICES.forEach(i => {
-        let minX = 999, maxX = -999, minY = 999, maxY = -999;
-        motionWindow.forEach(pose => {
-            let n = getNormalizedJoints(pose);
-            if (n && n[i]) {
-                if(n[i].x < minX) minX = n[i].x;
-                if(n[i].x > maxX) maxX = n[i].x;
-                if(n[i].y < minY) minY = n[i].y;
-                if(n[i].y > maxY) maxY = n[i].y;
-            }
-        });
-        totalMotion += Math.hypot(maxX - minX, maxY - minY);
-    });
-    return totalMotion;
+    if (motionWindow.length < 5) return 0;
+    let totalMotion = 0;
+    EVAL_INDICES.forEach(i => {
+        let minX = 999, maxX = -999, minY = 999, maxY = -999;
+        motionWindow.forEach(pose => {
+            let n = getNormalizedJoints(pose);
+            if (n && n[i]) {
+                if(n[i].x < minX) minX = n[i].x;
+                if(n[i].x > maxX) maxX = n[i].x;
+                if(n[i].y < minY) minY = n[i].y;
+                if(n[i].y > maxY) maxY = n[i].y;
+            }
+        });
+        totalMotion += Math.hypot(maxX - minX, maxY - minY);
+    });
+    return totalMotion;
 }
 
 function updateScore() {
@@ -634,13 +634,13 @@ function updateScore() {
 }
 
 function showResult() {
-    const getAvg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b) / arr.length) : 0;
-    document.getElementById('video_container').style.display = 'none';
-    document.getElementById('result_screen').style.display = 'flex';
-    document.getElementById('final_score').innerText = `${getAvg(scoreHistory)}%`;
-    document.getElementById('score_arms').innerText = `${getAvg(scoreHistoryArms)}%`;
-    document.getElementById('score_legs').innerText = `${getAvg(scoreHistoryLegs)}%`;
-    document.getElementById('score_body').innerText = `${getAvg(scoreHistoryBody)}%`;
+    const getAvg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b) / arr.length) : 0;
+    document.getElementById('video_container').style.display = 'none';
+    document.getElementById('result_screen').style.display = 'flex';
+    document.getElementById('final_score').innerText = `${getAvg(scoreHistory)}%`;
+    document.getElementById('score_arms').innerText = `${getAvg(scoreHistoryArms)}%`;
+    document.getElementById('score_legs').innerText = `${getAvg(scoreHistoryLegs)}%`;
+    document.getElementById('score_body').innerText = `${getAvg(scoreHistoryBody)}%`;
 }
 </script>
 </body>
