@@ -35,7 +35,6 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            /* 🌟 修正：ホログラムの不透明度を0.75から0.45（絶妙な薄さ）に変更 */
             opacity: 0.45;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
@@ -129,6 +128,10 @@ let userMotionWindow = [];
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
+// 🌟 カメラの物理的な遅延（ラグ）を打ち消すためのオフセット秒数
+// 音楽をこの秒数だけ遅らせてスタートすることで、画面上の見た目が一致します。
+const CAMERA_LAG_OFFSET = 0.15; 
+
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12],
   [11, 12],
@@ -182,7 +185,7 @@ function initCamera() {
     tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
     
     tVideo = document.getElementById('teacher_video');
-    tAudio = document.getElementById('bgm_audio'); // 🌟 音声オブジェクトを取得
+    tAudio = document.getElementById('bgm_audio'); 
 
     teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -234,7 +237,6 @@ function startQuest() {
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
 
-    // 🌟 音声側の終了を検知して結果画面へ
     tAudio.onended = () => {
         isPlaying = false;
         tVideo.pause();
@@ -249,7 +251,6 @@ function startCountdown() {
     let count = 5; 
     const msg = document.getElementById('msg_overlay');
     
-    // カウントダウン中の事前バッファリング
     tAudio.volume = 0;
     tAudio.play().then(() => {
         setTimeout(() => {
@@ -267,13 +268,17 @@ function startCountdown() {
             msg.innerText = "START!";
             playBeep(1760, 0.4); 
             
-            // 🌟 映像（ミュート）と音楽を同時にスタート
+            // 🌟 映像遅延対策：映像を先にスタートし、音楽をCAMERA_LAG_OFFSET分だけ遅らせてスタートする
             tVideo.currentTime = 0;
             tAudio.currentTime = 0;
             
-            Promise.all([tVideo.play(), tAudio.play()]).then(() => {
-                isPlaying = true;
-                isCounting = false;
+            tVideo.play().then(() => {
+                setTimeout(() => {
+                    tAudio.play().then(() => {
+                        isPlaying = true;
+                        isCounting = false;
+                    });
+                }, CAMERA_LAG_OFFSET * 1000); // 0.15秒後に音楽スタート
             }).catch(e => console.error("Play error:", e));
 
         } else {
@@ -287,10 +292,12 @@ function startCountdown() {
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
-        // 🌟 音ズレ番犬システム（Sync Watchdog）
-        // 映像が音声より0.15秒以上ズレたら、映像を強制ワープさせて音に合わせる！
-        if (isPlaying && Math.abs(tVideo.currentTime - tAudio.currentTime) > 0.15) {
-            tVideo.currentTime = tAudio.currentTime;
+        // 🌟 音ズレ番犬システム：映像のタイムが「音楽のタイム＋ラグ補正分」とズレていたら強制補正
+        if (isPlaying) {
+            let targetVideoTime = tAudio.currentTime + CAMERA_LAG_OFFSET;
+            if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.15) {
+                tVideo.currentTime = targetVideoTime;
+            }
         }
 
         if (tVideo.currentTime !== lastTeacherVideoTime) {
