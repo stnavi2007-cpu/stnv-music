@@ -127,18 +127,17 @@ let userMotionWindow = [];
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 13点のみの接続
+// 13点フル採点接続
 const CUSTOM_CONNECTIONS = [
-  [0, 11], [0, 12],             // 鼻〜肩
-  [11, 12],                     // 両肩
-  [11, 13], [13, 15],           // 左腕
-  [12, 14], [14, 16],           // 右腕
-  [11, 23], [12, 24], [23, 24], // 胴体
-  [23, 25], [25, 27],           // 左脚
-  [24, 26], [26, 28]            // 右脚
+  [0, 11], [0, 12],
+  [11, 12],
+  [11, 13], [13, 15],
+  [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24],
+  [23, 25], [25, 27],
+  [24, 26], [26, 28]
 ];
 
-// 🌟 修正：採点に使う関節に「0（鼻＝頭の動き）」を追加して13点フル採点に！！
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
 let audioCtx;
@@ -192,7 +191,7 @@ function initCamera() {
             if(teacherHistory.length > 3) teacherHistory.shift(); 
 
             teacherMotionWindow.push(results.poseLandmarks);
-            if(teacherMotionWindow.length > 15) teacherMotionWindow.shift();
+            if(teacherMotionWindow.length > 15) teacherMotionWindow.shift(); 
         }
     });
 
@@ -417,14 +416,28 @@ function updateScore() {
         let uNorm = getNormalizedJoints(currentUserLandmarks);
         if (!uNorm) return;
 
+        // 🌟 先生と生徒の「総合的な運動量」を比較
         let teacherTotalMotion = calculateTotalMotion(teacherMotionWindow);
         let userTotalMotion = calculateTotalMotion(userMotionWindow);
         
         let motionPenalty = 1.0;
-        if (teacherTotalMotion > 1.0) { 
+        
+        // 先生が動いている時の判定
+        if (teacherTotalMotion > 0.8) { 
             let motionRatio = userTotalMotion / teacherTotalMotion;
+            
+            // 🌟 デタラメ対策①：サボり（棒立ち）ペナルティ
             if (motionRatio < 0.5) { 
-                motionPenalty = Math.max(0.1, motionRatio * 2.0); 
+                motionPenalty = Math.max(0.1, motionRatio * 1.5); 
+            } 
+            // 🌟 デタラメ対策②：オーバーダンス（暴れすぎ）ペナルティ
+            else if (motionRatio > 1.8) {
+                motionPenalty = Math.max(0.1, 1.5 / motionRatio);
+            }
+        } else {
+            // 先生が止まっているのに、生徒が暴れている場合のペナルティ
+            if (userTotalMotion > 1.5) {
+                motionPenalty = 0.2; 
             }
         }
 
@@ -455,7 +468,7 @@ function updateScore() {
 
             EVAL_INDICES.forEach(i => {
                 let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                let penalizedDiff = Math.max(0, diff - 0.15); 
+                let penalizedDiff = Math.max(0, diff - 0.1); // ノイズ許容を少し厳しく
                 
                 let weight = jointWeights[i];
                 weightedDiffSum += penalizedDiff * weight;
@@ -463,10 +476,17 @@ function updateScore() {
             });
             
             let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
-            let tempScore = Math.max(0, 100 - (avgDiff * 200));
+            
+            // 🌟 デタラメ対策③：非線形カーブ（クリフ）採点
+            // ズレが0.4（胴体の40%）を超えたら、部分点を与えず即座に「0点」にする厳しい落とし方
+            let maxAllowedDiff = 0.4;
+            let errorRatio = Math.min(1.0, avgDiff / maxAllowedDiff);
+            let tempScore = 100 * (1.0 - Math.pow(errorRatio, 2.0)); // 2乗カーブで急激に落とす
+            
             if (tempScore > bestScore) bestScore = tempScore;
         });
 
+        // 最終スコアにペナルティを掛ける
         rawScore = bestScore * motionPenalty;
         scoreHistory.push(rawScore);
     }
