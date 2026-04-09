@@ -15,7 +15,6 @@
             margin: 0; overflow: hidden; text-align: center; 
         }
         
-        /* 走査線エフェクト */
         body::after {
             content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
@@ -36,13 +35,14 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.75;
+            /* 🌟 修正：ホログラムの不透明度を0.75から0.45（絶妙な薄さ）に変更 */
+            opacity: 0.45;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
 
-        video { 
+        video, audio { 
             position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
         }
         
@@ -95,7 +95,9 @@
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
-    <video id="teacher_video" src="sample_dance.mp4" playsinline preload="auto"></video>    
+    <video id="teacher_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>    
+    <audio id="bgm_audio" src="sample_dance.mp4" preload="auto"></audio>
+
     <canvas id="output_canvas"></canvas>
     <canvas id="teacher_canvas"></canvas>
     
@@ -112,7 +114,7 @@
 </div>
 
 <script>
-let pose, teacherPose, camera, tVideo, tCanvas, tCtx, canvasCtx;
+let pose, teacherPose, camera, tVideo, tAudio, tCanvas, tCtx, canvasCtx;
 let isPlaying = false;
 let isCounting = false;
 let currentTeacherLandmarks = null;
@@ -127,7 +129,6 @@ let userMotionWindow = [];
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 13点フル採点接続
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12],
   [11, 12],
@@ -140,33 +141,33 @@ const CUSTOM_CONNECTIONS = [
 
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
-let audioCtx;
-function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let beepCtx;
+function initBeepAudio() {
+    if (!beepCtx) {
+        beepCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
+    if (beepCtx.state === 'suspended') {
+        beepCtx.resume();
     }
 }
 
 function playBeep(frequency, duration) {
-    if (!audioCtx) return;
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
+    if (!beepCtx) return;
+    const oscillator = beepCtx.createOscillator();
+    const gainNode = beepCtx.createGain();
     
     oscillator.type = 'sine'; 
     oscillator.frequency.value = frequency; 
     
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05);
-    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+    gainNode.gain.setValueAtTime(0, beepCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(1, beepCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(0, beepCtx.currentTime + duration);
 
     oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+    gainNode.connect(beepCtx.destination);
     
     oscillator.start();
-    oscillator.stop(audioCtx.currentTime + duration);
+    oscillator.stop(beepCtx.currentTime + duration);
 }
 
 function initCamera() {
@@ -179,7 +180,9 @@ function initCamera() {
 
     tCanvas = document.getElementById('teacher_canvas');
     tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
+    
     tVideo = document.getElementById('teacher_video');
+    tAudio = document.getElementById('bgm_audio'); // 🌟 音声オブジェクトを取得
 
     teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -226,14 +229,15 @@ function initCamera() {
 }
 
 function startQuest() {
-    initAudio(); 
-    tVideo.muted = false;
-
+    initBeepAudio(); 
+    
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
 
-    tVideo.onended = () => {
+    // 🌟 音声側の終了を検知して結果画面へ
+    tAudio.onended = () => {
         isPlaying = false;
+        tVideo.pause();
         showResult();
     };
 
@@ -245,12 +249,13 @@ function startCountdown() {
     let count = 5; 
     const msg = document.getElementById('msg_overlay');
     
-    tVideo.volume = 0;
-    tVideo.play().then(() => {
+    // カウントダウン中の事前バッファリング
+    tAudio.volume = 0;
+    tAudio.play().then(() => {
         setTimeout(() => {
-            tVideo.pause();
-            tVideo.currentTime = 0;
-            tVideo.volume = 1;
+            tAudio.pause();
+            tAudio.currentTime = 0;
+            tAudio.volume = 1;
         }, 100);
     });
 
@@ -262,11 +267,14 @@ function startCountdown() {
             msg.innerText = "START!";
             playBeep(1760, 0.4); 
             
+            // 🌟 映像（ミュート）と音楽を同時にスタート
             tVideo.currentTime = 0;
-            tVideo.play().then(()=>{
+            tAudio.currentTime = 0;
+            
+            Promise.all([tVideo.play(), tAudio.play()]).then(() => {
                 isPlaying = true;
                 isCounting = false;
-            }).catch(e => console.error(e));
+            }).catch(e => console.error("Play error:", e));
 
         } else {
             clearInterval(timer);
@@ -279,6 +287,12 @@ function startCountdown() {
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
+        // 🌟 音ズレ番犬システム（Sync Watchdog）
+        // 映像が音声より0.15秒以上ズレたら、映像を強制ワープさせて音に合わせる！
+        if (isPlaying && Math.abs(tVideo.currentTime - tAudio.currentTime) > 0.15) {
+            tVideo.currentTime = tAudio.currentTime;
+        }
+
         if (tVideo.currentTime !== lastTeacherVideoTime) {
             lastTeacherVideoTime = tVideo.currentTime;
             await teacherPose.send({image: tVideo});
@@ -416,26 +430,18 @@ function updateScore() {
         let uNorm = getNormalizedJoints(currentUserLandmarks);
         if (!uNorm) return;
 
-        // 🌟 先生と生徒の「総合的な運動量」を比較
         let teacherTotalMotion = calculateTotalMotion(teacherMotionWindow);
         let userTotalMotion = calculateTotalMotion(userMotionWindow);
         
         let motionPenalty = 1.0;
-        
-        // 先生が動いている時の判定
         if (teacherTotalMotion > 0.8) { 
             let motionRatio = userTotalMotion / teacherTotalMotion;
-            
-            // 🌟 デタラメ対策①：サボり（棒立ち）ペナルティ
             if (motionRatio < 0.5) { 
                 motionPenalty = Math.max(0.1, motionRatio * 1.5); 
-            } 
-            // 🌟 デタラメ対策②：オーバーダンス（暴れすぎ）ペナルティ
-            else if (motionRatio > 1.8) {
+            } else if (motionRatio > 1.8) {
                 motionPenalty = Math.max(0.1, 1.5 / motionRatio);
             }
         } else {
-            // 先生が止まっているのに、生徒が暴れている場合のペナルティ
             if (userTotalMotion > 1.5) {
                 motionPenalty = 0.2; 
             }
@@ -468,7 +474,7 @@ function updateScore() {
 
             EVAL_INDICES.forEach(i => {
                 let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                let penalizedDiff = Math.max(0, diff - 0.1); // ノイズ許容を少し厳しく
+                let penalizedDiff = Math.max(0, diff - 0.1); 
                 
                 let weight = jointWeights[i];
                 weightedDiffSum += penalizedDiff * weight;
@@ -476,17 +482,13 @@ function updateScore() {
             });
             
             let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
-            
-            // 🌟 デタラメ対策③：非線形カーブ（クリフ）採点
-            // ズレが0.4（胴体の40%）を超えたら、部分点を与えず即座に「0点」にする厳しい落とし方
             let maxAllowedDiff = 0.4;
             let errorRatio = Math.min(1.0, avgDiff / maxAllowedDiff);
-            let tempScore = 100 * (1.0 - Math.pow(errorRatio, 2.0)); // 2乗カーブで急激に落とす
+            let tempScore = 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
             
             if (tempScore > bestScore) bestScore = tempScore;
         });
 
-        // 最終スコアにペナルティを掛ける
         rawScore = bestScore * motionPenalty;
         scoreHistory.push(rawScore);
     }
