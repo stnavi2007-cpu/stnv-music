@@ -125,7 +125,7 @@
 let pose, teacherPose, camera, tVideo, tAudio, tCanvas, tCtx, canvasCtx;
 let isPlaying = false;
 let isCounting = false;
-let isQuestFinished = false; // 無限ループ停止用のフラグを追加
+let isQuestFinished = false; 
 let currentTeacherLandmarks = null;
 let currentUserLandmarks = null;
 let displayScore = 0;
@@ -248,7 +248,7 @@ function initCamera() {
 
 function startQuest() {
     initBeepAudio(); 
-    isQuestFinished = false; // フラグリセット
+    isQuestFinished = false; 
     
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
@@ -358,7 +358,7 @@ function startCountdown() {
 
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
-    if (isQuestFinished) return; // ループ停止処理
+    if (isQuestFinished) return; 
     if (tVideo.readyState >= 2) {
         if (isPlaying && tAudio.currentTime > 0.5) {
             let targetVideoTime = tAudio.currentTime + (isStudentTurn ? 0 : CAMERA_LAG_OFFSET);
@@ -387,7 +387,7 @@ function filterEssentialLandmarks(landmarks) {
 
 let lastChromaTime = -1;
 function processChromaKey() {
-    if (isQuestFinished) return; // ループ停止処理
+    if (isQuestFinished) return; 
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
         if (tVideo.currentTime !== lastChromaTime) {
             lastChromaTime = tVideo.currentTime;
@@ -497,7 +497,6 @@ function updateScore() {
     let rawScore = 0;
     let bestPartScores = { arms: 0, legs: 0, body: 0 };
 
-    // 配列エラー防止用に追加ガード条件をセット
     if (teacherHistory.length > 0 && currentUserLandmarks && currentUserLandmarks.length > 0 && teacherMotionWindow.length > 10 && userMotionWindow.length > 10) {
         
         let uNorm = getNormalizedJoints(currentUserLandmarks);
@@ -510,6 +509,20 @@ function updateScore() {
             let tVectors = {};
             let uVectors = {};
             let totalWeight = 0;
+
+            // ▼▼▼ アイソレーション（部分動作）抽出用の最大動作量検索 ▼▼▼
+            let maxTMag = 0;
+            EVAL_INDICES.forEach(i => {
+                if (tCurrForVec[i] && tPastNorm[i]) {
+                    let tDx = tCurrForVec[i].x - tPastNorm[i].x;
+                    let tDy = tCurrForVec[i].y - tPastNorm[i].y;
+                    let m = Math.hypot(tDx, tDy);
+                    if (m > maxTMag) maxTMag = m;
+                }
+            });
+
+            // 先生の最大動作の30%以上、かつ最低0.06以上の動きのみを「意図的な動き」とみなす
+            let activeThreshold = Math.max(0.06, maxTMag * 0.3);
 
             EVAL_INDICES.forEach(i => {
                 if (!tCurrForVec[i] || !tPastNorm[i] || !uNorm[i] || !uPastNorm[i]) {
@@ -528,7 +541,8 @@ function updateScore() {
                 tVectors[i] = { dx: tDx, dy: tDy, mag: tMag };
                 uVectors[i] = { dx: uDx, dy: uDy, mag: uMag };
 
-                let weight = tMag > 0.03 ? tMag : 0; 
+                // 動いていない部位のスコア加算を完全に防ぐフィルター
+                let weight = tMag >= activeThreshold ? tMag : 0; 
                 jointWeights[i] = weight;
                 totalWeight += weight;
             });
@@ -561,14 +575,28 @@ function updateScore() {
                             let speedScore = Math.max(0, 1.0 - (speedDiff / Math.max(tMag, 0.05)));
 
                             let angleScore = 0;
+                            let cosTheta = -1; 
+                            
                             if (uMag > 0.01 && tMag > 0.01) {
                                 let dotProduct = tVectors[i].dx * uVectors[i].dx + tVectors[i].dy * uVectors[i].dy;
-                                let cosTheta = dotProduct / (tMag * uMag);
+                                cosTheta = dotProduct / (tMag * uMag);
                                 angleScore = Math.max(0, cosTheta); 
                             }
 
                             let movementScore = (speedScore * 0.5) + (angleScore * 0.5);
-                            if (uMag < 0.01) { movementScore = 0; }
+                            
+                            // 棒立ちキラー
+                            if (uMag < 0.04) { 
+                                movementScore = 0; 
+                                posScore = 0; 
+                            }
+                            
+                            // デタラメ暴れキラー
+                            if (cosTheta < 0.5 || posScore < 0.4) {
+                                movementScore = 0;
+                                posScore = 0;
+                            }
+
                             let jointScore = 100 * posScore * Math.pow(movementScore, 0.7); 
                             
                             weightedScoreSum += jointScore * weight;
@@ -619,7 +647,7 @@ function updateScore() {
 }
 
 function showResult() {
-    isQuestFinished = true; // ループを停止させる
+    isQuestFinished = true; 
     const getAvg = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b) / arr.length) : 0;
     document.getElementById('video_container').style.display = 'none';
     document.getElementById('result_screen').style.display = 'flex';
