@@ -22,9 +22,8 @@
             background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
         }
         
-        /* 🌟 最初から表示させておくため display:none を削除 */
         #video_container { 
-            position: relative; width: 100vw; height: 100vh; background: #000; 
+            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
         }
         
         #output_canvas { 
@@ -58,17 +57,11 @@
             white-space: pre-wrap; pointer-events: auto; 
         }
 
-        /* 🌟 スタート画面の背景を透明（rgba）にして、奥のホログラムを見えるようにする */
         .overlay { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.4); 
+            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
             z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
         }
-        /* 結果画面などは元の暗い背景に戻すための追加クラス */
-        .overlay-dark {
-            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
-        }
-
         .btn { 
             padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
             font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
@@ -79,6 +72,24 @@
     </style>
 </head>
 <body>
+
+<div id="start_screen" class="overlay">
+    <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
+    <p style="color:#fff;">まずはカメラを起動します。</p>
+    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
+    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
+</div>
+
+<div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
+    <button class="btn" onclick="startQuest()">MISSION START</button>
+</div>
+
+<div id="result_screen" class="overlay" style="display:none;">
+    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
+    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
+    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
+    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
+</div>
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
@@ -96,26 +107,6 @@
             </div>
         </div>
     </div>
-</div>
-
-<div id="start_screen" class="overlay">
-    <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
-    <p style="color:#fff; text-shadow: 2px 2px 0 #000;">まずはカメラを起動します。</p>
-    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
-    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px; text-shadow: 2px 2px 0 #000;">AI Loading...</p>
-</div>
-
-<div id="mission_btn_container" class="overlay" style="display:none;">
-    <h1>🌌 位置を合わせろ！ 🌌</h1>
-    <p style="color:#fff; text-shadow: 2px 2px 0 #000;">奥のホログラムと体を重ねて準備だ！</p>
-    <button class="btn" onclick="startQuest()">MISSION START</button>
-</div>
-
-<div id="result_screen" class="overlay overlay-dark" style="display:none;">
-    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
-    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
-    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
-    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
 </div>
 
 <script>
@@ -183,6 +174,26 @@ function initCamera() {
     const outputCanvas = document.getElementById('output_canvas');
     canvasCtx = outputCanvas.getContext('2d');
 
+    tCanvas = document.getElementById('teacher_canvas');
+    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
+    tVideo = document.getElementById('teacher_video');
+
+    // 先生用AIの準備
+    teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    teacherPose.onResults((results) => { 
+        currentTeacherLandmarks = results.poseLandmarks; 
+    });
+
+    // ⚠️ iOSの制限を突破する処理（ボタンが押されたこの瞬間に動画を一度再生し、静止させる）
+    tVideo.muted = true;
+    tVideo.play().then(() => {
+        tVideo.pause();
+        tVideo.currentTime = 0.1;
+        processChromaKey(); // ホログラム描画ループ開始
+        trackTeacherPose(); // 先生の骨格トラッキング開始
+    }).catch(e => console.log(e));
+
     // 生徒用AIの準備
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -196,30 +207,8 @@ function initCamera() {
     
     camera.start().then(() => {
         document.getElementById('start_screen').style.display = 'none';
-        // 🌟 ここでMISSION START画面を透過で表示させる
-        document.getElementById('mission_btn_container').style.display = 'flex';
-        
-        tCanvas = document.getElementById('teacher_canvas');
-        tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
-        tVideo = document.getElementById('teacher_video');
-
-        teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-        teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-        teacherPose.onResults((results) => { 
-            currentTeacherLandmarks = results.poseLandmarks; 
-        });
-
-        // ⚠️ ここで動画を「ミュート」のまま 0.1秒再生して止める（静止画表示）
-        tVideo.muted = true;
-        tVideo.currentTime = 0.1;
-        
-        // 動画のフレームが更新されたら1回だけ描画ループを回す
-        tVideo.addEventListener('seeked', function onSeeked() {
-            processChromaKey(); 
-            trackTeacherPose();
-            tVideo.removeEventListener('seeked', onSeeked);
-        });
-
+        document.getElementById('video_container').style.display = 'block';
+        document.getElementById('mission_btn_container').style.display = 'block';
     }).catch(e => {
         alert("カメラの起動に失敗しました。権限を確認してください。");
     });
