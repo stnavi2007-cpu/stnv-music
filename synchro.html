@@ -42,9 +42,10 @@
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
-        .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
+        /* 🌟 修正：右上のスコアボックスをコンパクトに */
+        .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 5px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 80px; }
         
-        /* 🌟 右上のスコア表示のフォントサイズを半分（40px -> 20px）に縮小 */
+        /* 🌟 修正：スコア表示のフォントサイズを半分（20px）に */
         #sync_display { font-size: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; font-weight: bold; }
         
         #msg_overlay { 
@@ -126,7 +127,7 @@
     <div class="ui-layer">
         <div class="header">
             <div class="status-box" id="status_ui" style="display:none;">
-                <div style="font-size:14px; color:#fff;">SCORE</div>
+                <div style="font-size:10px; color:#fff;">SCORE</div>
                 <div id="sync_display">0%</div>
             </div>
         </div>
@@ -203,7 +204,6 @@ function initCamera() {
     tVideo.onloadedmetadata = () => {
         if (tVideo.duration > 0) {
             turnDuration = tVideo.duration;
-            console.log("Turn Duration set to:", turnDuration);
         }
     };
 
@@ -260,12 +260,10 @@ function startCountdown() {
         if (count > 0) {
             msg.innerText = count;
         } else if (count === 0) {
-            msg.innerText = "START";
+            // 🌟 修正：スタートの時の「チーン（高音）」や余計な文字を削除。即座に先生ターンへ移行
+            msg.innerText = "";
             clearInterval(timer);
-            setTimeout(() => {
-                msg.innerText = "";
-                startTeacherTurn();
-            }, 500);
+            startTeacherTurn();
         }
         count--;
     }, 1000);
@@ -430,6 +428,7 @@ function endGame() {
 
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
+    // 🌟 修正：動画が再生されている（先生のターン）時のみAI解析を実行し、それ以外はストップして負荷を減らす
     if (tVideo.readyState >= 2 && gameState === 'TEACHER') {
         if (tVideo.currentTime !== lastTeacherVideoTime) {
             lastTeacherVideoTime = tVideo.currentTime;
@@ -454,21 +453,30 @@ const DRAW_CONNECTIONS = [
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]
 ];
 
-let lastChromaTime = -1;
+// 🌟 修正：先生の描画データを保存しておく変数。
+// 動画が停止している時も、このデータを元に毎フレーム再描画を行う。
+let lastTeacherFrameData = null;
+let lastTeacherFilteredLandmarks = null;
+
 function processChromaKey() {
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
-        if (tVideo.currentTime !== lastChromaTime) {
-            lastChromaTime = tVideo.currentTime;
-            
+        
+        if (gameState === 'TEACHER') {
+            // 先生のターン中：動画から新しいフレームを取得して処理
             if (tCanvas.width !== tVideo.videoWidth) {
                 tCanvas.width = tVideo.videoWidth;
                 tCanvas.height = tVideo.videoHeight;
             }
             
-            tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-            tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
-            let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
+            // 裏のキャンバスに動画を描画してピクセルデータを取得
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = tVideo.videoWidth;
+            tempCanvas.height = tVideo.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(tVideo, 0, 0, tempCanvas.width, tempCanvas.height);
+            let frame = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
             
+            // クロマキー処理
             for (let i = 0; i < frame.data.length / 4; i++) {
                 let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
                 let diff = g - Math.max(r, b);
@@ -476,25 +484,43 @@ function processChromaKey() {
                     frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
                 }
             }
-            tCtx.putImageData(frame, 0, 0);
-
+            
+            // 最後のフレームデータを保存
+            lastTeacherFrameData = frame;
+            
             if (currentTeacherLandmarks) {
                 let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
                 let normalizedOffsetX = hologramOffsetX / tCanvas.width;
                 let normalizedOffsetY = hologramOffsetY / tCanvas.height;
                 
-                let offsetLandmarks = filteredLandmarks.map(lm => ({
+                lastTeacherFilteredLandmarks = filteredLandmarks.map(lm => ({
                     x: lm.x + normalizedOffsetX,
                     y: lm.y + normalizedOffsetY,
                     z: lm.z,
                     visibility: lm.visibility
                 }));
-
-                drawConnectors(tCtx, offsetLandmarks, DRAW_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-                drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
             }
         }
-    } 
+        
+        // --- 描画処理（常に実行） ---
+        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
+        
+        if (lastTeacherFrameData) {
+            // 保存しておいたクロマキー済みのフレームを描画
+            // putImageDataは位置をずらせないので、一時キャンバスに書いてからdrawImageでずらして描画
+            const displayCanvas = document.createElement('canvas');
+            displayCanvas.width = tCanvas.width;
+            displayCanvas.height = tCanvas.height;
+            displayCanvas.getContext('2d').putImageData(lastTeacherFrameData, 0, 0);
+            
+            tCtx.drawImage(displayCanvas, hologramOffsetX, hologramOffsetY);
+        }
+
+        if (lastTeacherFilteredLandmarks) {
+            drawConnectors(tCtx, lastTeacherFilteredLandmarks, DRAW_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+            drawLandmarks(tCtx, lastTeacherFilteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+        }
+    }
     requestAnimationFrame(processChromaKey);
 }
 
