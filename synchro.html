@@ -458,7 +458,8 @@ function onUserResults(results) {
     updateScore();
 }
 
-function getNormalizedJoints(pose) {
+// 鏡合わせ(ミラー)判定のためのフラグを追加
+function getNormalizedJoints(pose, isMirrored = false) {
     if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
     
     let midShoulderX = (pose[11].x + pose[12].x) / 2;
@@ -466,14 +467,27 @@ function getNormalizedJoints(pose) {
     let midHipX = (pose[23].x + pose[24].x) / 2;
     let midHipY = (pose[23].y + pose[24].y) / 2;
     
+    if (isMirrored) {
+        midShoulderX = 1.0 - midShoulderX;
+        midHipX = 1.0 - midHipX;
+    }
+
     let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
 
     let normPose = {};
     EVAL_INDICES.forEach(i => {
-        if (pose[i]) {
+        let mapI = i;
+        if (isMirrored) {
+            // ミラーリング用に関節の左右を反転
+            const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27, 0:0};
+            mapI = MIRROR_MAP[i] || i;
+        }
+
+        if (pose[mapI]) {
+            let px = isMirrored ? (1.0 - pose[mapI].x) : pose[mapI].x;
             normPose[i] = {
-                x: (pose[i].x - midShoulderX) / torsoLength,
-                y: (pose[i].y - midShoulderY) / torsoLength
+                x: (px - midShoulderX) / torsoLength,
+                y: (pose[mapI].y - midShoulderY) / torsoLength
             };
         }
     });
@@ -499,10 +513,10 @@ function updateScore() {
 
     if (teacherHistory.length > 0 && currentUserLandmarks && currentUserLandmarks.length > 0 && teacherMotionWindow.length > 10 && userMotionWindow.length > 10) {
         
-        let uNorm = getNormalizedJoints(currentUserLandmarks);
-        let uPastNorm = getNormalizedJoints(userMotionWindow[0]);
-        let tPastNorm = getNormalizedJoints(teacherMotionWindow[0]);
-        let tCurrForVec = getNormalizedJoints(teacherMotionWindow[teacherMotionWindow.length - 1]);
+        let uNorm = getNormalizedJoints(currentUserLandmarks, true); // 鏡合わせON
+        let uPastNorm = getNormalizedJoints(userMotionWindow[0], true);
+        let tPastNorm = getNormalizedJoints(teacherMotionWindow[0], false);
+        let tCurrForVec = getNormalizedJoints(teacherMotionWindow[teacherMotionWindow.length - 1], false);
         
         if (uNorm && uPastNorm && tPastNorm && tCurrForVec) {
             let jointWeights = {};
@@ -510,7 +524,7 @@ function updateScore() {
             let uVectors = {};
             let totalWeight = 0;
 
-            // ▼▼▼ アイソレーション（部分動作）抽出用の最大動作量検索 ▼▼▼
+            // 全ダンス対応：XY両方の軸で最大動作量を検索
             let maxTMag = 0;
             EVAL_INDICES.forEach(i => {
                 if (tCurrForVec[i] && tPastNorm[i]) {
@@ -521,8 +535,8 @@ function updateScore() {
                 }
             });
 
-            // 先生の最大動作の30%以上、かつ最低0.06以上の動きのみを「意図的な動き」とみなす
-            let activeThreshold = Math.max(0.06, maxTMag * 0.3);
+            // 先生の最大動作の25%以上、かつ最低0.02以上の動きのみを「意図的な動き」とみなす
+            let activeThreshold = Math.max(0.02, maxTMag * 0.25);
 
             EVAL_INDICES.forEach(i => {
                 if (!tCurrForVec[i] || !tPastNorm[i] || !uNorm[i] || !uPastNorm[i]) {
@@ -555,7 +569,7 @@ function updateScore() {
                 const BODY_INDICES = [0, 11, 12, 23, 24];
 
                 teacherHistory.forEach(pastTeacher => {
-                    let tNorm = getNormalizedJoints(pastTeacher);
+                    let tNorm = getNormalizedJoints(pastTeacher, false);
                     if (!tNorm) return;
 
                     let calculateGroupScore = (indices) => {
@@ -572,7 +586,7 @@ function updateScore() {
                             let tMag = tVectors[i].mag;
                             let uMag = uVectors[i].mag;
                             let speedDiff = Math.abs(tMag - uMag);
-                            let speedScore = Math.max(0, 1.0 - (speedDiff / Math.max(tMag, 0.05)));
+                            let speedScore = Math.max(0, 1.0 - (speedDiff / Math.max(tMag, 0.1)));
 
                             let angleScore = 0;
                             let cosTheta = -1; 
@@ -585,14 +599,14 @@ function updateScore() {
 
                             let movementScore = (speedScore * 0.5) + (angleScore * 0.5);
                             
-                            // 棒立ちキラー
-                            if (uMag < 0.04) { 
+                            // 棒立ちキラー (0.015まで基準を下げて、普通のダンスの動きを救済)
+                            if (uMag < 0.015) { 
                                 movementScore = 0; 
                                 posScore = 0; 
                             }
                             
-                            // デタラメ暴れキラー
-                            if (cosTheta < 0.5 || posScore < 0.4) {
+                            // デタラメ暴れキラー (少し優しくした)
+                            if (cosTheta < 0.2 || posScore < 0.25) {
                                 movementScore = 0;
                                 posScore = 0;
                             }
