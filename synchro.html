@@ -421,6 +421,7 @@ function processChromaKey() {
                         visibility: lm.visibility
                     }));
 
+                    // 点線の描画（MediaPipe の仕様に合わせる）
                     drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
                     drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
                 }
@@ -447,6 +448,7 @@ function onUserResults(results) {
         if(userMotionWindow.length > 15) userMotionWindow.shift();
 
         let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
+        // 点線の描画（MediaPipe の仕様に合わせる）
         drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
         drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
