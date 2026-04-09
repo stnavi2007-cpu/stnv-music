@@ -121,11 +121,12 @@ let displayScore = 0;
 let scoreHistory = [];
 
 let teacherHistory = []; 
+// 🌟 追加：動いている部分だけを判定するための長めの履歴（約1秒分）
+let teacherMotionWindow = []; 
 
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 🌟 修正：手先・足先の余計な接続を削除。13点のみ！
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12],             // 鼻〜肩
   [11, 12],                     // 両肩
@@ -183,8 +184,13 @@ function initCamera() {
         currentTeacherLandmarks = results.poseLandmarks; 
         
         if(results.poseLandmarks) {
+            // タイムラグ吸収用の短い履歴（3フレーム）
             teacherHistory.push(results.poseLandmarks);
             if(teacherHistory.length > 3) teacherHistory.shift();
+
+            // 動き検出用の長い履歴（30フレーム＝約1秒分）
+            teacherMotionWindow.push(results.poseLandmarks);
+            if(teacherMotionWindow.length > 30) teacherMotionWindow.shift();
         }
     });
 
@@ -235,7 +241,8 @@ function startQuest() {
 
 function startCountdown() {
     isCounting = true;
-    let count = 8;
+    // 🌟 修正：8カウントを5カウントに変更
+    let count = 5;
     const msg = document.getElementById('msg_overlay');
     
     tVideo.volume = 0;
@@ -269,7 +276,6 @@ function startCountdown() {
     }, 1000);
 }
 
-// 🌟 修正：重すぎるAI解析を「動画の時間が進んだ時」だけに制限し、音ズレとフリーズを防止！
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
@@ -281,11 +287,9 @@ async function trackTeacherPose() {
     requestAnimationFrame(trackTeacherPose);
 }
 
-// 🌟 修正：必要な13点以外をすべて消去するフィルター
 function filterEssentialLandmarks(landmarks) {
     if(!landmarks) return null;
     
-    // 描画・計算に使うインデックスのリスト
     const keepIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
     
     return landmarks.map((lm, index) => {
@@ -296,7 +300,6 @@ function filterEssentialLandmarks(landmarks) {
     });
 }
 
-// 🌟 修正：重すぎる透過処理も「動画の時間が進んだ時」だけに制限
 let lastChromaTime = -1;
 function processChromaKey() {
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
@@ -371,8 +374,7 @@ function updateScore() {
     if (isCounting || !isPlaying) return;
     
     let rawScore = 0;
-    if (teacherHistory.length > 0 && currentUserLandmarks) {
-        // 🌟 修正：比較する骨のペアも、必要な部分だけに厳選
+    if (teacherHistory.length > 0 && currentUserLandmarks && teacherMotionWindow.length > 0) {
         const bones = [
             [11, 13], [13, 15], // 左腕
             [12, 14], [14, 16], // 右腕
@@ -380,11 +382,27 @@ function updateScore() {
             [24, 26], [26, 28]  // 右脚
         ];
         
+        // 🌟 新機能：先生の各関節が「最近1秒間でどれくらい動いたか」を計算し、動いている関節の重みを大きくする
+        let boneWeights = bones.map(b => {
+            let minAngle = 360;
+            let maxAngle = -360;
+            teacherMotionWindow.forEach(pose => {
+                let a = getVectorAngle(pose[b[0]], pose[b[1]]);
+                if(a < minAngle) minAngle = a;
+                if(a > maxAngle) maxAngle = a;
+            });
+            let motion = Math.abs(maxAngle - minAngle);
+            // 最低重み0.1（ほぼ無視）、最高重み1.0（フルで減点対象）。15度以上動いていれば最高重み。
+            return Math.max(0.1, Math.min(1.0, motion / 15.0));
+        });
+
         let bestScore = 0;
 
         teacherHistory.forEach(pastTeacher => {
-            let diffSum = 0;
-            bones.forEach(b => {
+            let weightedDiffSum = 0;
+            let totalWeight = 0;
+
+            bones.forEach((b, index) => {
                 let tAngle = getVectorAngle(pastTeacher[b[0]], pastTeacher[b[1]]);
                 let uAngle = getVectorAngle(currentUserLandmarks[b[0]], currentUserLandmarks[b[1]]);
                 
@@ -392,10 +410,18 @@ function updateScore() {
                 if (angleDiff > 180) angleDiff = 360 - angleDiff;
                 
                 let penalizedDiff = Math.max(0, angleDiff - 15);
-                diffSum += penalizedDiff;
+                
+                // 動いている関節のズレほど、大きく減点される
+                let weight = boneWeights[index];
+                weightedDiffSum += penalizedDiff * weight;
+                totalWeight += weight;
             });
             
-            let tempScore = Math.max(0, 100 - (diffSum / bones.length * 1.5));
+            // 平均のズレを計算
+            let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
+            
+            // 減点倍率を少し厳しめ（2.0倍）にして、動いていないと一気に点数が落ちるように調整
+            let tempScore = Math.max(0, 100 - (avgDiff * 2.0));
             if (tempScore > bestScore) bestScore = tempScore;
         });
 
