@@ -1,112 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV AR SYNCHRO</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
-        
-        body { 
-            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
-            margin: 0; overflow: hidden; text-align: center; 
-        }
-        
-        /* 走査線エフェクト */
-        body::after {
-            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
-        }
-        
-        #video_container { 
-            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
-        }
-        
-        #output_canvas { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; transform: scaleX(-1); z-index: 1; 
-        }
-        
-        #teacher_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; 
-            z-index: 2; 
-            pointer-events: none;
-            opacity: 0.75;
-            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-        }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>STNV AR SYNCHRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        
+        body { 
+            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
+            margin: 0; overflow: hidden; text-align: center; 
+        }
+        
+        /* 走査線エフェクト */
+        body::after {
+            content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%; z-index: 9999; pointer-events: none;
+        }
+        
+        #video_container { 
+            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
+        }
+        
+        #output_canvas { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; transform: scaleX(-1); z-index: 1; 
+        }
+        
+        #teacher_canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: contain; 
+            z-index: 2; 
+            pointer-events: none;
+            opacity: 0.75;
+            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
+        }
 
-        video { display: none; }
-        
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
-        .header { display: flex; justify-content: flex-end; }
-        .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
-        
-        #sync_display { font-size: 50px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
-        #rank_display { font-size: 20px; color: #ff0; }
-        
-        #msg_overlay { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 60px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; 
-        }
+        video { display: none; }
+        
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
+        .header { display: flex; justify-content: flex-end; }
+        .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
+        
+        #sync_display { font-size: 50px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
+        #rank_display { font-size: 20px; color: #ff0; }
+        
+        #msg_overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 60px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
+            white-space: pre-wrap; pointer-events: auto; 
+        }
 
-        .overlay { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
-            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
-        }
-        .btn { 
-            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
-            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
-            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
-        }
-        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
-        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
-    </style>
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
+            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+        .btn { 
+            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
+            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
+            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
+        }
+        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
+        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
+    </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
-    <p style="color:#fff;">まずはカメラを起動します。</p>
-    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
-    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
+    <h1>🌌 AR SYNCHRO QUEST 🌌</h1>
+    <p style="color:#fff;">まずはカメラを起動します。</p>
+    <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
+    <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
 
 <div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
-    <button class="btn" onclick="startQuest()">MISSION START</button>
+    <button class="btn" onclick="startQuest()">MISSION START</button>
 </div>
 
 <div id="result_screen" class="overlay" style="display:none;">
-    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
-    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
-    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
-    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
+    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
+    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
+    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
+    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
 </div>
 
 <div id="video_container">
-    <video id="input_video" autoplay playsinline muted></video>
-    <video id="teacher_video" src="sample_dance.mp4" playsinline preload="auto"></video>    
-    <canvas id="output_canvas"></canvas>
-    <canvas id="teacher_canvas"></canvas>
-    
-    <div id="msg_overlay"></div>
+    <video id="input_video" autoplay playsinline muted></video>
+    <video id="teacher_video" src="sample_dance.mp4" playsinline preload="auto"></video>    
+    <canvas id="output_canvas"></canvas>
+    <canvas id="teacher_canvas"></canvas>
+    
+    <div id="msg_overlay"></div>
 
-    <div class="ui-layer">
-        <div class="header">
-            <div class="status-box" id="status_ui" style="display:none;">
-                <div id="sync_display">0%</div>
-                <div id="rank_display">-</div>
-            </div>
-        </div>
-    </div>
+    <div class="ui-layer">
+        <div class="header">
+            <div class="status-box" id="status_ui" style="display:none;">
+                <div id="sync_display">0%</div>
+                <div id="rank_display">-</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -119,273 +119,273 @@ let displayScore = 0;
 let scoreHistory = [];
 
 // 位置調整用の変数
-let hologramOffsetX = +60; 
+let hologramOffsetX = +60; 
 let hologramOffsetY = +100; // 下に下げる
 
 // カスタム骨格接続（顔は鼻=0のみ、その他は腕・胴体・脚）
 // 目(1〜6)や耳(7,8)への接続を除外
 const CUSTOM_CONNECTIONS = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // 腕と肩
-  [11, 23], [12, 24], [23, 24], // 胴体
-  [23, 25], [24, 26], [25, 27], [26, 28], // 脚
-  [27, 31], [28, 32], [27, 29], [28, 30], [29, 31], [30, 32], // 足先
-  [15, 21], [16, 22], [15, 17], [16, 18], [15, 19], [16, 20], [17, 19], [18, 20], // 手先
-  [0, 11], [0, 12] // 鼻から肩へ（簡易的な首）
+  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // 腕と肩
+  [11, 23], [12, 24], [23, 24], // 胴体
+  [23, 25], [24, 26], [25, 27], [26, 28], // 脚
+  [27, 31], [28, 32], [27, 29], [28, 30], [29, 31], [30, 32], // 足先
+  [15, 21], [16, 22], [15, 17], [16, 18], [15, 19], [16, 20], [17, 19], [18, 20], // 手先
+  [0, 11], [0, 12] // 鼻から肩へ（簡易的な首）
 ];
 
 // 🔊 電子音の設定
 let audioCtx;
 function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 }
 
 function playBeep(frequency, duration) {
-    if (!audioCtx) return;
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    oscillator.type = 'sine'; 
-    oscillator.frequency.value = frequency; 
-    
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05);
-    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+    if (!audioCtx) return;
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    oscillator.type = 'sine'; 
+    oscillator.frequency.value = frequency; 
+    
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + duration);
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + duration);
 }
 
 // ------------------------------------
 // Step 1: カメラの起動（最初のボタン）
 // ------------------------------------
 function initCamera() {
-    document.getElementById('btn_camera_start').style.display = 'none';
-    document.getElementById('loading_msg').style.display = 'block';
+    document.getElementById('btn_camera_start').style.display = 'none';
+    document.getElementById('loading_msg').style.display = 'block';
 
-    const videoElement = document.getElementById('input_video');
-    const outputCanvas = document.getElementById('output_canvas');
-    canvasCtx = outputCanvas.getContext('2d');
+    const videoElement = document.getElementById('input_video');
+    const outputCanvas = document.getElementById('output_canvas');
+    canvasCtx = outputCanvas.getContext('2d');
 
-    tCanvas = document.getElementById('teacher_canvas');
-    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
-    tVideo = document.getElementById('teacher_video');
+    tCanvas = document.getElementById('teacher_canvas');
+    tCtx = tCanvas.getContext('2d', { willReadFrequently: true });
+    tVideo = document.getElementById('teacher_video');
 
-    // 先生用AIの準備
-    teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    teacherPose.onResults((results) => { 
-        currentTeacherLandmarks = results.poseLandmarks; 
-    });
+    // 先生用AIの準備
+    teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    teacherPose.onResults((results) => { 
+        currentTeacherLandmarks = results.poseLandmarks; 
+    });
 
-    // ⚠️ iOSの制限を突破する処理（ボタンが押されたこの瞬間に動画を一度再生し、静止させる）
-    tVideo.muted = true;
-    tVideo.play().then(() => {
-        tVideo.pause();
-        tVideo.currentTime = 0.1;
-        processChromaKey(); // ホログラム描画ループ開始
-        trackTeacherPose(); // 先生の骨格トラッキング開始
-    }).catch(e => console.log(e));
+    // ⚠️ iOSの制限を突破する処理（ボタンが押されたこの瞬間に動画を一度再生し、静止させる）
+    tVideo.muted = true;
+    tVideo.play().then(() => {
+        tVideo.pause();
+        tVideo.currentTime = 0.01;
+        processChromaKey(); // ホログラム描画ループ開始
+        trackTeacherPose(); // 先生の骨格トラッキング開始
+    }).catch(e => console.log(e));
 
-    // 生徒用AIの準備
-    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-    pose.onResults(onUserResults);
+    // 生徒用AIの準備
+    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+    pose.onResults(onUserResults);
 
-    // カメラ起動
-    camera = new Camera(videoElement, { 
-        onFrame: async () => { await pose.send({image: videoElement}); }, 
-        width: 1280, height: 720 
-    });
-    
-    camera.start().then(() => {
-        document.getElementById('start_screen').style.display = 'none';
-        document.getElementById('video_container').style.display = 'block';
-        document.getElementById('mission_btn_container').style.display = 'block';
-    }).catch(e => {
-        alert("カメラの起動に失敗しました。権限を確認してください。");
-    });
+    // カメラ起動
+    camera = new Camera(videoElement, { 
+        onFrame: async () => { await pose.send({image: videoElement}); }, 
+        width: 1280, height: 720 
+    });
+    
+    camera.start().then(() => {
+        document.getElementById('start_screen').style.display = 'none';
+        document.getElementById('video_container').style.display = 'block';
+        document.getElementById('mission_btn_container').style.display = 'block';
+    }).catch(e => {
+        alert("カメラの起動に失敗しました。権限を確認してください。");
+    });
 }
 
 // ------------------------------------
 // Step 2: ミッションスタート（第2のボタン）
 // ------------------------------------
 function startQuest() {
-    initAudio(); 
-    // 音を出せるようにミュート解除
-    tVideo.muted = false;
+    initAudio(); 
+    // 音を出せるようにミュート解除
+    tVideo.muted = false;
 
-    document.getElementById('mission_btn_container').style.display = 'none';
-    document.getElementById('status_ui').style.display = 'block';
+    document.getElementById('mission_btn_container').style.display = 'none';
+    document.getElementById('status_ui').style.display = 'block';
 
-    tVideo.onended = () => {
-        isPlaying = false;
-        showResult();
-    };
+    tVideo.onended = () => {
+        isPlaying = false;
+        showResult();
+    };
 
-    startCountdown();
+    startCountdown();
 }
 
 function startCountdown() {
-    isCounting = true;
-    let count = 8;
-    const msg = document.getElementById('msg_overlay');
-    
-    // カウントダウン中も動画は0.1秒の位置で止めておく
-    tVideo.currentTime = 0.1;
+    isCounting = true;
+    let count = 8;
+    const msg = document.getElementById('msg_overlay');
+    
+    // カウントダウン中も動画は0.01秒の位置で止めておく
+    tVideo.currentTime = 0.01;
 
-    const timer = setInterval(() => {
-        if (count > 0) {
-            msg.innerText = `GET READY!\n${count}`;
-            playBeep(880, 0.1); // ピッ
-        } else if (count === 0) {
-            msg.innerText = "START!";
-            playBeep(1760, 0.4); // ピーー！
-            
-            // ⚠️ここで動画の頭出しと再生を行う（音ズレ防止）
-            tVideo.currentTime = 0;
-            tVideo.play().then(()=>{
-                isPlaying = true;
-                isCounting = false;
-            }).catch(e => console.error("Play error:", e));
+    const timer = setInterval(() => {
+        if (count > 0) {
+            msg.innerText = `GET READY!\n${count}`;
+            playBeep(880, 0.1); // ピッ
+        } else if (count === 0) {
+            msg.innerText = "START!";
+            playBeep(1760, 0.4); // ピーー！
+            
+            // ⚠️ここで動画の頭出しと再生を行う（音ズレ防止）
+            tVideo.currentTime = 0;
+            tVideo.play().then(()=>{
+                isPlaying = true;
+                isCounting = false;
+            }).catch(e => console.error("Play error:", e));
 
-        } else {
-            clearInterval(timer);
-            msg.innerText = "";
-        }
-        count--;
-    }, 1000);
+        } else {
+            clearInterval(timer);
+            msg.innerText = "";
+        }
+        count--;
+    }, 1000);
 }
 
 // ------------------------------------
 // 描画・判定ロジック
 // ------------------------------------
 async function trackTeacherPose() {
-    if (tVideo.readyState >= 2) {
-        await teacherPose.send({image: tVideo});
-    }
-    requestAnimationFrame(trackTeacherPose);
+    if (tVideo.readyState >= 2) {
+        await teacherPose.send({image: tVideo});
+    }
+    requestAnimationFrame(trackTeacherPose);
 }
 
 // 顔の不要な点を消すフィルター
 function filterFaceLandmarks(landmarks) {
-    if(!landmarks) return null;
-    return landmarks.map((lm, index) => {
-        // 目や耳のインデックス(1〜10)のvisibilityを0にして描画させない
-        if (index >= 1 && index <= 10) {
-            return { ...lm, visibility: 0 };
-        }
-        return lm;
-    });
+    if(!landmarks) return null;
+    return landmarks.map((lm, index) => {
+        // 目や耳のインデックス(1〜10)のvisibilityを0にして描画させない
+        if (index >= 1 && index <= 10) {
+            return { ...lm, visibility: 0 };
+        }
+        return lm;
+    });
 }
 
 function processChromaKey() {
-    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
-        if (tCanvas.width !== tVideo.videoWidth) {
-            tCanvas.width = tVideo.videoWidth;
-            tCanvas.height = tVideo.videoHeight;
-        }
-        
-        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-        // 動画をoffsetX, offsetY分ずらして描画
-        tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
-        let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-        
-        for (let i = 0; i < frame.data.length / 4; i++) {
-            let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
-            let diff = g - Math.max(r, b);
-            if (diff > 15) { 
-                frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
-            }
-        }
-        tCtx.putImageData(frame, 0, 0);
+    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
+        if (tCanvas.width !== tVideo.videoWidth) {
+            tCanvas.width = tVideo.videoWidth;
+            tCanvas.height = tVideo.videoHeight;
+        }
+        
+        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
+        // 動画をoffsetX, offsetY分ずらして描画
+        tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
+        let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
+        
+        for (let i = 0; i < frame.data.length / 4; i++) {
+            let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
+            let diff = g - Math.max(r, b);
+            if (diff > 15) { 
+                frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
+            }
+        }
+        tCtx.putImageData(frame, 0, 0);
 
-        if (currentTeacherLandmarks) {
-            let filteredLandmarks = filterFaceLandmarks(currentTeacherLandmarks);
-            let normalizedOffsetX = hologramOffsetX / tCanvas.width;
-            let normalizedOffsetY = hologramOffsetY / tCanvas.height;
-            
-            let offsetLandmarks = filteredLandmarks.map(lm => ({
-                x: lm.x + normalizedOffsetX,
-                y: lm.y + normalizedOffsetY,
-                z: lm.z,
-                visibility: lm.visibility
-            }));
+        if (currentTeacherLandmarks) {
+            let filteredLandmarks = filterFaceLandmarks(currentTeacherLandmarks);
+            let normalizedOffsetX = hologramOffsetX / tCanvas.width;
+            let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+            
+            let offsetLandmarks = filteredLandmarks.map(lm => ({
+                x: lm.x + normalizedOffsetX,
+                y: lm.y + normalizedOffsetY,
+                z: lm.z,
+                visibility: lm.visibility
+            }));
 
-            drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-            drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-        }
-    }
-    requestAnimationFrame(processChromaKey);
+            drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+            drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+        }
+    }
+    requestAnimationFrame(processChromaKey);
 }
 
 function onUserResults(results) {
-    currentUserLandmarks = results.poseLandmarks;
-    const canvas = document.getElementById('output_canvas');
-    if (canvas.width !== results.image.width) {
-        canvas.width = results.image.width;
-        canvas.height = results.image.height;
-    }
+    currentUserLandmarks = results.poseLandmarks;
+    const canvas = document.getElementById('output_canvas');
+    if (canvas.width !== results.image.width) {
+        canvas.width = results.image.width;
+        canvas.height = results.image.height;
+    }
 
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    
-    if (currentUserLandmarks) {
-        let filteredLandmarks = filterFaceLandmarks(currentUserLandmarks);
-        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
-        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
-    }
-    canvasCtx.restore();
-    
-    updateScore();
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    
+    if (currentUserLandmarks) {
+        let filteredLandmarks = filterFaceLandmarks(currentUserLandmarks);
+        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+    }
+    canvasCtx.restore();
+    
+    updateScore();
 }
 
 function calculateAngle(a, b, c) {
-    let rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-    let deg = Math.abs(rad * 180 / Math.PI);
-    return deg > 180 ? 360 - deg : deg;
+    let rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let deg = Math.abs(rad * 180 / Math.PI);
+    return deg > 180 ? 360 - deg : deg;
 }
 
 function updateScore() {
-    if (isCounting || !isPlaying) return;
-    
-    let rawScore = 0;
-    if (currentTeacherLandmarks && currentUserLandmarks) {
-        const joints = [[11,13,15],[12,14,16],[23,25,27],[24,26,28],[11,23,25],[12,24,26]];
-        let diffSum = 0;
-        joints.forEach(j => {
-            let tA = calculateAngle(currentTeacherLandmarks[j[0]], currentTeacherLandmarks[j[1]], currentTeacherLandmarks[j[2]]);
-            let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
-            diffSum += Math.abs(tA - uA);
-        });
-        rawScore = Math.max(0, 100 - (diffSum / joints.length * 2.2));
-        scoreHistory.push(rawScore);
-    }
+    if (isCounting || !isPlaying) return;
+    
+    let rawScore = 0;
+    if (currentTeacherLandmarks && currentUserLandmarks) {
+        const joints = [[11,13,15],[12,14,16],[23,25,27],[24,26,28],[11,23,25],[12,24,26]];
+        let diffSum = 0;
+        joints.forEach(j => {
+            let tA = calculateAngle(currentTeacherLandmarks[j[0]], currentTeacherLandmarks[j[1]], currentTeacherLandmarks[j[2]]);
+            let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
+            diffSum += Math.abs(tA - uA);
+        });
+        rawScore = Math.max(0, 100 - (diffSum / joints.length * 2.2));
+        scoreHistory.push(rawScore);
+    }
 
-    displayScore += (rawScore - displayScore) * 0.1;
-    const stepScore = Math.round(displayScore / 5) * 5;
-    document.getElementById('sync_display').innerText = `${stepScore}%`;
-    
-    let rank = "POOR";
-    if (stepScore > 80) rank = "PERFECT!!";
-    else if (stepScore > 60) rank = "GREAT!";
-    else if (stepScore > 40) rank = "GOOD";
-    document.getElementById('rank_display').innerText = rank;
+    displayScore += (rawScore - displayScore) * 0.1;
+    const stepScore = Math.round(displayScore / 5) * 5;
+    document.getElementById('sync_display').innerText = `${stepScore}%`;
+    
+    let rank = "POOR";
+    if (stepScore > 80) rank = "PERFECT!!";
+    else if (stepScore > 60) rank = "GREAT!";
+    else if (stepScore > 40) rank = "GOOD";
+    document.getElementById('rank_display').innerText = rank;
 }
 
 function showResult() {
-    const avg = scoreHistory.length > 0 ? scoreHistory.reduce((a, b) => a + b) / scoreHistory.length : 0;
-    document.getElementById('video_container').style.display = 'none';
-    document.getElementById('result_screen').style.display = 'flex';
-    document.getElementById('final_score').innerText = `${Math.round(avg)}%`;
+    const avg = scoreHistory.length > 0 ? scoreHistory.reduce((a, b) => a + b) / scoreHistory.length : 0;
+    document.getElementById('video_container').style.display = 'none';
+    document.getElementById('result_screen').style.display = 'flex';
+    document.getElementById('final_score').innerText = `${Math.round(avg)}%`;
 }
 </script>
 </body>
