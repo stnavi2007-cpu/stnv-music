@@ -357,7 +357,6 @@ function startCountdown() {
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
-        // 再生直後の0.5秒間は強制補正を止めてカクツキを防止
         if (isPlaying && tAudio.currentTime > 0.5) {
             let targetVideoTime = tAudio.currentTime + (isStudentTurn ? 0 : CAMERA_LAG_OFFSET);
             if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.2) {
@@ -421,7 +420,7 @@ function processChromaKey() {
                         visibility: lm.visibility
                     }));
 
-                    // 点線の描画（MediaPipe の仕様に合わせる）
+                    // 点線を確実に描画
                     drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
                     drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
                 }
@@ -448,7 +447,8 @@ function onUserResults(results) {
         if(userMotionWindow.length > 15) userMotionWindow.shift();
 
         let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
-        // 点線の描画（MediaPipe の仕様に合わせる）
+        
+        // 点線を確実に描画
         drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
         drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
@@ -477,25 +477,6 @@ function getNormalizedJoints(pose) {
         }
     });
     return normPose;
-}
-
-function calculateTotalMotion(motionWindow) {
-    if (motionWindow.length < 5) return 0;
-    let totalMotion = 0;
-    EVAL_INDICES.forEach(i => {
-        let minX = 999, maxX = -999, minY = 999, maxY = -999;
-        motionWindow.forEach(pose => {
-            let n = getNormalizedJoints(pose);
-            if (n && n[i]) {
-                if(n[i].x < minX) minX = n[i].x;
-                if(n[i].x > maxX) maxX = n[i].x;
-                if(n[i].y < minY) minY = n[i].y;
-                if(n[i].y > maxY) maxY = n[i].y;
-            }
-        });
-        totalMotion += Math.hypot(maxX - minX, maxY - minY);
-    });
-    return totalMotion;
 }
 
 function updateScore() {
