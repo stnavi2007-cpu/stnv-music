@@ -35,7 +35,7 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.45; 
+            opacity: 0.45; /* 絶妙な不透明度 */
             transition: opacity 0.3s;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
@@ -55,7 +55,7 @@
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             font-size: 70px; color: #fff; text-shadow: 0 0 20px #f0f, 4px 4px 0 #000; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; font-weight: bold;
+            white-space: pre-wrap; pointer-events: auto; font-weight: bold; text-align: center;
         }
 
         .overlay { 
@@ -93,7 +93,7 @@
 
 <div id="start_screen" class="overlay">
     <h1>AR SYNCHRO QUEST</h1>
-    <p style="color:#fff;">ターン制ダンスバトル (BPM: 80)</p>
+    <p style="color:#fff;">TURN BATTLE</p>
     <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
     <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
@@ -146,15 +146,8 @@ let currentUserLandmarks = null;
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 🌟 カメララグ補正（解決策B）
-const CAMERA_LAG_OFFSET = 0.15; 
-
-// 🌟 音楽の設定（BPM80）
-const BPM = 80;
-const BEAT_INTERVAL = 60 / BPM; // 1拍の秒数 (0.75秒)
-const TURN_DURATION = BEAT_INTERVAL * 4; // 4カウントの秒数 (3.0秒)
-const START_OFFSET = 0.0; // 映像の開始から何秒後に最初の1カウント目が来るか（ズレる場合はここを調整）
-
+// 🌟 動画の長さを基準にしたターン長（ロード時に自動取得）
+let turnDuration = 3.0; // デフォルト。後で動画の長さで上書きされる
 let gameState = 'INIT'; // INIT, COUNTDOWN, TEACHER, PLAYER, EVAL, END
 
 const PARTS = {
@@ -171,6 +164,8 @@ let playerTurnData = [];
 
 let totalScores = [];
 let partScores = { HEAD: [], L_ARM: [], R_ARM: [], BODY: [], LEGS: [] };
+let turnCount = 0;
+const MAX_TURNS = 4; // 先生→生徒 を何セット繰り返すか（任意で変更可）
 
 let beepCtx;
 function initBeepAudio() {
@@ -210,6 +205,14 @@ function initCamera() {
     
     tVideo = document.getElementById('teacher_video');
     tAudio = document.getElementById('bgm_audio'); 
+
+    // 🌟 動画の長さを取得してターンの長さを決定
+    tVideo.onloadedmetadata = () => {
+        if (tVideo.duration > 0) {
+            turnDuration = tVideo.duration;
+            console.log("Turn Duration set to:", turnDuration);
+        }
+    };
 
     teacherPose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -255,12 +258,13 @@ function startGame() {
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
     
+    turnCount = 0;
     gameState = 'COUNTDOWN';
     startCountdown();
 }
 
 function startCountdown() {
-    let count = 4; // BPM80に合わせた4カウント
+    let count = 3; 
     const msg = document.getElementById('msg_overlay');
     
     tAudio.volume = 0;
@@ -275,46 +279,39 @@ function startCountdown() {
         } else if (count === 0) {
             msg.innerText = "START!";
             playBeep(1760, 0.4); 
-            
             clearInterval(timer);
-            
-            tVideo.currentTime = START_OFFSET;
-            tAudio.currentTime = START_OFFSET;
-
-            // 🌟 映像を先に再生し、カメラ遅延分だけ音楽を遅らせる
-            tVideo.play().then(() => {
-                setTimeout(() => {
-                    tAudio.play();
-                    msg.innerText = "";
-                    startTeacherTurn();
-                }, CAMERA_LAG_OFFSET * 1000);
-            });
+            setTimeout(() => {
+                msg.innerText = "";
+                startTeacherTurn();
+            }, 500);
         }
         count--;
-    }, BEAT_INTERVAL * 1000); // 🌟 カウントダウンもBPM80に同期
+    }, 1000);
 }
 
 function startTeacherTurn() {
+    if (turnCount >= MAX_TURNS) {
+        endGame();
+        return;
+    }
+
     gameState = 'TEACHER';
     teacherTurnData = []; 
     document.getElementById('msg_overlay').innerText = "WATCH!";
     document.getElementById('msg_overlay').style.color = "#0ff";
-    tCanvas.style.opacity = "0.45"; 
+    tCanvas.style.opacity = "0.75"; 
 
+    tVideo.currentTime = 0;
+    tAudio.currentTime = 0;
     tVideo.play();
     tAudio.play();
 
-    // 🌟 TURN_DURATION（3.0秒）後にプレイヤーの番へ
+    // 動画が終了したら生徒のターンへ（durationを利用）
     setTimeout(() => {
         tVideo.pause();
         tAudio.pause();
-        
-        if(tVideo.currentTime >= tVideo.duration - 0.5) {
-            endGame();
-        } else {
-            startPlayerTurn();
-        }
-    }, TURN_DURATION * 1000);
+        startPlayerTurn();
+    }, turnDuration * 1000);
 }
 
 function startPlayerTurn() {
@@ -324,30 +321,30 @@ function startPlayerTurn() {
     document.getElementById('msg_overlay').style.color = "#f0f";
     tCanvas.style.opacity = "0.15"; 
 
-    // 🌟 BPM80のメトロノーム
+    // 動画の長さを4等分してメトロノームを鳴らす
+    let interval = (turnDuration * 1000) / 4;
     let beats = 1;
     playBeep(1000, 0.05); // 1拍目
     
     let metronome = setInterval(() => {
         playBeep(1000, 0.05);
         beats++;
-        if(beats >= 4) {
-            clearInterval(metronome);
-        }
-    }, BEAT_INTERVAL * 1000); // 0.75秒ごと
+        if(beats >= 4) clearInterval(metronome);
+    }, interval);
 
+    // ターン終了時に採点へ
     setTimeout(() => {
         evaluateTurn();
-    }, TURN_DURATION * 1000);
+    }, turnDuration * 1000);
 }
 
-// 🌟 総運動量（サボり・暴れ検知用）
-function calculateTotalMotion(motionWindow) {
-    if (motionWindow.length < 5) return 0;
+// 🌟 総運動量を計算する関数
+function calculateTotalMotion(dataArray) {
+    if (dataArray.length < 5) return 0;
     let totalMotion = 0;
     ALL_INDICES.forEach(i => {
         let minX = 999, maxX = -999, minY = 999, maxY = -999;
-        motionWindow.forEach(pose => {
+        dataArray.forEach(pose => {
             if (pose && pose[i]) {
                 if(pose[i].x < minX) minX = pose[i].x;
                 if(pose[i].x > maxX) maxX = pose[i].x;
@@ -360,50 +357,48 @@ function calculateTotalMotion(motionWindow) {
     return totalMotion;
 }
 
+// 🌟 時間軸に沿ったフレームごとの厳密な採点（デタラメ＆棒立ちを完全排除）
 function evaluateTurn() {
     gameState = 'EVAL';
     document.getElementById('msg_overlay').innerText = "";
 
-    if (teacherTurnData.length > 5 && playerTurnData.length > 5) {
+    let finalTurnScore = 0;
+    let finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+
+    // 🌟 誰も映っていない（データが極端に少ない）場合は問答無用で0点
+    if (teacherTurnData.length > 5 && playerTurnData.length > 10) {
         
-        // 🌟 サボり・暴れペナルティ計算
-        let teacherTotalMotion = calculateTotalMotion(teacherTurnData);
-        let userTotalMotion = calculateTotalMotion(playerTurnData);
-        let motionPenalty = 1.0;
-        
-        if (teacherTotalMotion > 0.8) { 
-            let motionRatio = userTotalMotion / teacherTotalMotion;
-            if (motionRatio < 0.4) { 
-                motionPenalty = Math.max(0.1, motionRatio * 1.5); // 棒立ちペナルティ
-            } else if (motionRatio > 2.0) {
-                motionPenalty = Math.max(0.1, 1.5 / motionRatio); // 暴れすぎペナルティ
-            }
-        } else {
-            if (userTotalMotion > 1.5) {
-                motionPenalty = 0.2; // 先生が止まってるのに暴れたペナルティ
-            }
-        }
+        let N = teacherTurnData.length;
+        let M = playerTurnData.length;
+        let totalScoreSum = 0;
+        let partScoreSums = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
-        let bestOverallScore = 0;
-        let bestPartScoresObj = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+        // 時間軸（フレーム）ごとに採点
+        for (let i = 0; i < N; i++) {
+            let tPose = teacherTurnData[i];
+            
+            // 生徒のデータから、同じタイミング（±15%のズレ許容）のフレームを探す
+            let j_center = Math.floor(i * (M / N));
+            let window = Math.max(3, Math.floor(M * 0.15)); 
+            let j_start = Math.max(0, j_center - window);
+            let j_end = Math.min(M - 1, j_center + window);
 
-        teacherTurnData.forEach(tPose => {
-            let bestMatchForThisFrame = 0;
-            let bestPartsForThisFrame = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+            let bestFrameScore = 0;
+            let bestFrameParts = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
-            playerTurnData.forEach(uPose => {
+            for (let j = j_start; j <= j_end; j++) {
+                let uPose = playerTurnData[j];
                 let currentMatchScore = 0;
                 let currentParts = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
                 let totalPoints = 0;
 
                 for (const [partName, indices] of Object.entries(PARTS)) {
                     let partDiffSum = 0;
-                    indices.forEach(i => {
-                        if(tPose[i] && uPose[i]) {
-                            let diff = Math.hypot(tPose[i].x - uPose[i].x, tPose[i].y - uPose[i].y);
-                            let penalizedDiff = Math.max(0, diff - 0.1); 
-                            // ズレ0.4（胴体の40%）で0点になるカーブ
-                            let errorRatio = Math.min(1.0, penalizedDiff / 0.4);
+                    indices.forEach(idx => {
+                        if(tPose[idx] && uPose[idx]) {
+                            let diff = Math.hypot(tPose[idx].x - uPose[idx].x, tPose[idx].y - uPose[idx].y);
+                            // 🌟 ズレが0.4（胴体の40%）以上なら0点になる厳しいカーブ
+                            let errorRatio = Math.min(1.0, diff / 0.4);
                             let point = 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
                             partDiffSum += point;
                         }
@@ -414,34 +409,53 @@ function evaluateTurn() {
                 }
 
                 let totalAvg = currentMatchScore / totalPoints;
-
-                if (totalAvg > bestMatchForThisFrame) {
-                    bestMatchForThisFrame = totalAvg;
-                    bestPartsForThisFrame = currentParts;
+                if (totalAvg > bestFrameScore) {
+                    bestFrameScore = totalAvg;
+                    bestFrameParts = currentParts;
                 }
-            });
-
-            if (bestMatchForThisFrame > bestOverallScore) {
-                bestOverallScore = bestMatchForThisFrame;
-                bestPartScoresObj = bestPartsForThisFrame;
             }
-        });
 
-        // ペナルティを適用
-        bestOverallScore *= motionPenalty;
-        for (const part in PARTS) {
-            bestPartScoresObj[part] *= motionPenalty;
+            totalScoreSum += bestFrameScore;
+            for (const part in PARTS) {
+                partScoreSums[part] += bestFrameParts[part];
+            }
         }
 
-        totalScores.push(bestOverallScore);
+        // フレームごとの平均点がベーススコア
+        finalTurnScore = totalScoreSum / N;
         for (const part in PARTS) {
-            partScores[part].push(bestPartScoresObj[part]);
+            finalPartScores[part] = partScoreSums[part] / N;
         }
 
-        document.getElementById('sync_display').innerText = `${Math.round(bestOverallScore)}%`;
+        // 🌟 棒立ち（サボり）ペナルティの適用
+        let teacherTotalMotion = calculateTotalMotion(teacherTurnData);
+        let userTotalMotion = calculateTotalMotion(playerTurnData);
+        
+        if (teacherTotalMotion > 1.0) { 
+            let motionRatio = userTotalMotion / teacherTotalMotion;
+            if (motionRatio < 0.4) { 
+                // 先生の40%以下しか動いていなければ、スコアを大幅減額
+                let penalty = Math.max(0.0, motionRatio * 2.0);
+                finalTurnScore *= penalty;
+                for (const part in PARTS) finalPartScores[part] *= penalty;
+            }
+        }
+    } else {
+        // 誰もいない場合は0点のまま
+        console.log("Player not detected or insufficient data. Score = 0");
     }
 
-    startTeacherTurn();
+    // 記録と表示
+    totalScores.push(finalTurnScore);
+    for (const part in PARTS) {
+        partScores[part].push(finalPartScores[part]);
+    }
+    document.getElementById('sync_display').innerText = `${Math.round(finalTurnScore)}%`;
+
+    turnCount++;
+    setTimeout(() => {
+        startTeacherTurn();
+    }, 1500); // 1.5秒スコアを見せてから次のターンへ
 }
 
 function endGame() {
@@ -452,11 +466,6 @@ function endGame() {
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2 && gameState === 'TEACHER') {
-        // 音ズレ補正番犬
-        if (Math.abs(tVideo.currentTime - (tAudio.currentTime + CAMERA_LAG_OFFSET)) > 0.15) {
-            tVideo.currentTime = tAudio.currentTime + CAMERA_LAG_OFFSET;
-        }
-
         if (tVideo.currentTime !== lastTeacherVideoTime) {
             lastTeacherVideoTime = tVideo.currentTime;
             await teacherPose.send({image: tVideo});
