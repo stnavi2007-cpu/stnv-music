@@ -121,21 +121,24 @@ let displayScore = 0;
 let scoreHistory = [];
 
 let teacherHistory = []; 
-// 🌟 追加：動いている部分だけを判定するための長めの履歴（約1秒分）
 let teacherMotionWindow = []; 
 
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
+// 13点のみの接続
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12],             // 鼻〜肩
   [11, 12],                     // 両肩
-  [11, 13], [13, 15],           // 左腕（肩〜ヒジ〜手首）
-  [12, 14], [14, 16],           // 右腕（肩〜ヒジ〜手首）
+  [11, 13], [13, 15],           // 左腕
+  [12, 14], [14, 16],           // 右腕
   [11, 23], [12, 24], [23, 24], // 胴体
-  [23, 25], [25, 27],           // 左脚（腰〜ヒザ〜足首）
-  [24, 26], [26, 28]            // 右脚（腰〜ヒザ〜足首）
+  [23, 25], [25, 27],           // 左脚
+  [24, 26], [26, 28]            // 右脚
 ];
+
+// 採点に使う12個の関節（鼻以外）
+const EVAL_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 
 let audioCtx;
 function initAudio() {
@@ -184,13 +187,11 @@ function initCamera() {
         currentTeacherLandmarks = results.poseLandmarks; 
         
         if(results.poseLandmarks) {
-            // タイムラグ吸収用の短い履歴（3フレーム）
             teacherHistory.push(results.poseLandmarks);
-            if(teacherHistory.length > 3) teacherHistory.shift();
+            if(teacherHistory.length > 3) teacherHistory.shift(); // 過去約0.1秒のラグ吸収用
 
-            // 動き検出用の長い履歴（30フレーム＝約1秒分）
             teacherMotionWindow.push(results.poseLandmarks);
-            if(teacherMotionWindow.length > 30) teacherMotionWindow.shift();
+            if(teacherMotionWindow.length > 30) teacherMotionWindow.shift(); // 過去約1秒の動き検知用
         }
     });
 
@@ -241,8 +242,7 @@ function startQuest() {
 
 function startCountdown() {
     isCounting = true;
-    // 🌟 修正：8カウントを5カウントに変更
-    let count = 5;
+    let count = 5; // 🌟 5カウントに変更！
     const msg = document.getElementById('msg_overlay');
     
     tVideo.volume = 0;
@@ -289,9 +289,7 @@ async function trackTeacherPose() {
 
 function filterEssentialLandmarks(landmarks) {
     if(!landmarks) return null;
-    
     const keepIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
-    
     return landmarks.map((lm, index) => {
         if (!keepIndices.includes(index)) {
             return { ...lm, visibility: 0 }; 
@@ -366,8 +364,29 @@ function onUserResults(results) {
     updateScore();
 }
 
-function getVectorAngle(p1, p2) {
-    return Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+// 🌟 新機能：体のサイズに合わせて座標を正規化する関数（距離計算用）
+// 両肩の中心を(0,0)とし、胴体の長さを1.0として、すべての関節の位置を計算し直します。
+function getNormalizedJoints(pose) {
+    if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
+    
+    let midShoulderX = (pose[11].x + pose[12].x) / 2;
+    let midShoulderY = (pose[11].y + pose[12].y) / 2;
+    let midHipX = (pose[23].x + pose[24].x) / 2;
+    let midHipY = (pose[23].y + pose[24].y) / 2;
+    
+    // 胴体の長さ（これを基準スケールにする）
+    let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
+
+    let normPose = {};
+    EVAL_INDICES.forEach(i => {
+        if (pose[i]) {
+            normPose[i] = {
+                x: (pose[i].x - midShoulderX) / torsoLength,
+                y: (pose[i].y - midShoulderY) / torsoLength
+            };
+        }
+    });
+    return normPose;
 }
 
 function updateScore() {
@@ -375,44 +394,48 @@ function updateScore() {
     
     let rawScore = 0;
     if (teacherHistory.length > 0 && currentUserLandmarks && teacherMotionWindow.length > 0) {
-        const bones = [
-            [11, 13], [13, 15], // 左腕
-            [12, 14], [14, 16], // 右腕
-            [23, 25], [25, 27], // 左脚
-            [24, 26], [26, 28]  // 右脚
-        ];
         
-        // 🌟 新機能：先生の各関節が「最近1秒間でどれくらい動いたか」を計算し、動いている関節の重みを大きくする
-        let boneWeights = bones.map(b => {
-            let minAngle = 360;
-            let maxAngle = -360;
-            teacherMotionWindow.forEach(pose => {
-                let a = getVectorAngle(pose[b[0]], pose[b[1]]);
-                if(a < minAngle) minAngle = a;
-                if(a > maxAngle) maxAngle = a;
+        let uNorm = getNormalizedJoints(currentUserLandmarks);
+        if (!uNorm) return;
+
+        // 🌟 先生の最近1秒間の動き幅を計算して「重み（ウェイト）」を作成
+        let jointWeights = {};
+        EVAL_INDICES.forEach(i => {
+            let minX = 999, maxX = -999, minY = 999, maxY = -999;
+            teacherMotionWindow.forEach(pastPose => {
+                let n = getNormalizedJoints(pastPose);
+                if (n && n[i]) {
+                    if(n[i].x < minX) minX = n[i].x;
+                    if(n[i].x > maxX) maxX = n[i].x;
+                    if(n[i].y < minY) minY = n[i].y;
+                    if(n[i].y > maxY) maxY = n[i].y;
+                }
             });
-            let motion = Math.abs(maxAngle - minAngle);
-            // 最低重み0.1（ほぼ無視）、最高重み1.0（フルで減点対象）。15度以上動いていれば最高重み。
-            return Math.max(0.1, Math.min(1.0, motion / 15.0));
+            // 動いた距離（胴体比率）
+            let motion = Math.hypot(maxX - minX, maxY - minY);
+            // 動いていれば最大重み1.0、動いていなければ最低0.1（無視レベル）
+            jointWeights[i] = Math.max(0.1, Math.min(1.0, motion / 0.3)); 
         });
 
         let bestScore = 0;
 
+        // タイムラグ吸収（過去数フレームの先生と総当たり比較）
         teacherHistory.forEach(pastTeacher => {
+            let tNorm = getNormalizedJoints(pastTeacher);
+            if (!tNorm) return;
+
             let weightedDiffSum = 0;
             let totalWeight = 0;
 
-            bones.forEach((b, index) => {
-                let tAngle = getVectorAngle(pastTeacher[b[0]], pastTeacher[b[1]]);
-                let uAngle = getVectorAngle(currentUserLandmarks[b[0]], currentUserLandmarks[b[1]]);
+            EVAL_INDICES.forEach(i => {
+                // 🌟 新機能：角度ではなく「位置のズレ（距離）」を計算
+                let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
                 
-                let angleDiff = Math.abs(tAngle - uAngle);
-                if (angleDiff > 180) angleDiff = 360 - angleDiff;
-                
-                let penalizedDiff = Math.max(0, angleDiff - 15);
-                
-                // 動いている関節のズレほど、大きく減点される
-                let weight = boneWeights[index];
+                // 多少のズレ（胴体の長さの10%程度）は許容するノイズ対策
+                let penalizedDiff = Math.max(0, diff - 0.1); 
+
+                // 動いている部位ほど減点の影響を大きくする
+                let weight = jointWeights[i];
                 weightedDiffSum += penalizedDiff * weight;
                 totalWeight += weight;
             });
@@ -420,8 +443,8 @@ function updateScore() {
             // 平均のズレを計算
             let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
             
-            // 減点倍率を少し厳しめ（2.0倍）にして、動いていないと一気に点数が落ちるように調整
-            let tempScore = Math.max(0, 100 - (avgDiff * 2.0));
+            // 🌟 スコア変換：ズレが0.4（胴体の半分くらい）で0点になる厳しい調整
+            let tempScore = Math.max(0, 100 - (avgDiff * 250));
             if (tempScore > bestScore) bestScore = tempScore;
         });
 
@@ -429,7 +452,8 @@ function updateScore() {
         scoreHistory.push(rawScore);
     }
 
-    displayScore += (rawScore - displayScore) * 0.1;
+    // スコアの表示を滑らかにする
+    displayScore += (rawScore - displayScore) * 0.15;
     const stepScore = Math.round(displayScore / 5) * 5;
     document.getElementById('sync_display').innerText = `${stepScore}%`;
     
