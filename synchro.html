@@ -45,7 +45,7 @@
         
         #sync_display { font-size: 25px; color: #0ff; text-shadow: 0 0 7px #0ff; font-weight: bold; }
         #rank_display { font-size: 10px; color: #ff0; }
-        #turn_display { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000, 0 0 10px #fff; z-index: 30; }
+        #turn_display { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); font-size: 28px; white-space: nowrap; font-weight: bold; text-shadow: 2px 2px 0 #000, 0 0 10px #fff; z-index: 30; }
         
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
@@ -139,7 +139,7 @@ let teacherMotionWindow = [];
 let userMotionWindow = []; 
 
 let hologramOffsetX = +60; 
-let hologramOffsetY = +100;
+let hologramOffsetY = +200; 
 
 let currentTurn = 0;
 let isStudentTurn = false;
@@ -270,10 +270,31 @@ function startQuest() {
         tVideo.currentTime = 0;
         tAudio.currentTime = 0;
         
+        let currentLag = isStudentTurn ? 0.1 : CAMERA_LAG_OFFSET;
+        
         tVideo.play().then(() => {
             setTimeout(() => {
-                if (isPlaying) tAudio.play().catch(e => console.error("Play error:", e));
-            }, CAMERA_LAG_OFFSET * 1000); 
+                if (isPlaying) {
+                    if (isStudentTurn) {
+                        tAudio.volume = 0; 
+                        tAudio.play().catch(e => console.error("Play error:", e));
+                        
+                        let beepCount = 0;
+                        playBeep(880, 0.1); 
+                        beepCount++;
+                        
+                        let beepInterval = setInterval(() => {
+                            if (!isPlaying) { clearInterval(beepInterval); return; }
+                            playBeep(880, 0.1);
+                            beepCount++;
+                            if (beepCount >= 4) clearInterval(beepInterval);
+                        }, 750);
+                    } else {
+                        tAudio.volume = 1; 
+                        tAudio.play().catch(e => console.error("Play error:", e));
+                    }
+                }
+            }, currentLag * 1000); 
         }).catch(e => console.error("Play error:", e));
     };
 
@@ -289,7 +310,6 @@ function startCountdown() {
         setTimeout(() => {
             tAudio.pause();
             tAudio.currentTime = 0;
-            tAudio.volume = 1;
         }, 100);
     });
 
@@ -299,7 +319,7 @@ function startCountdown() {
     function countdownLoop(now) {
         if (countdownStartTime === null) countdownStartTime = now;
         let elapsed = (now - countdownStartTime) / 750;
-        let currentCount = 5 - Math.floor(elapsed);
+        let currentCount = 4 - Math.floor(elapsed);
 
         if (currentCount > 0) {
             if (currentCount !== lastCount) {
@@ -316,6 +336,7 @@ function startCountdown() {
             
             tVideo.play().then(() => {
                 setTimeout(() => {
+                    tAudio.volume = 1;
                     tAudio.play().then(() => {
                         isPlaying = true;
                         isCounting = false;
@@ -331,7 +352,7 @@ let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
         if (isPlaying) {
-            let targetVideoTime = tAudio.currentTime + CAMERA_LAG_OFFSET;
+            let targetVideoTime = tAudio.currentTime + (isStudentTurn ? 0.1 : CAMERA_LAG_OFFSET);
             if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.15) {
                 tVideo.currentTime = targetVideoTime;
             }
@@ -367,32 +388,35 @@ function processChromaKey() {
             }
             
             tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-            tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
-            let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
             
-            for (let i = 0; i < frame.data.length / 4; i++) {
-                let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
-                let diff = g - Math.max(r, b);
-                if (diff > 15) { 
-                    frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
-                }
-            }
-            tCtx.putImageData(frame, 0, 0);
-
-            if (currentTeacherLandmarks) {
-                let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
-                let normalizedOffsetX = hologramOffsetX / tCanvas.width;
-                let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+            if (!isStudentTurn) {
+                tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
+                let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
                 
-                let offsetLandmarks = filteredLandmarks.map(lm => ({
-                    x: lm.x + normalizedOffsetX,
-                    y: lm.y + normalizedOffsetY,
-                    z: lm.z,
-                    visibility: lm.visibility
-                }));
+                for (let i = 0; i < frame.data.length / 4; i++) {
+                    let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
+                    let diff = g - Math.max(r, b);
+                    if (diff > 15) { 
+                        frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
+                    }
+                }
+                tCtx.putImageData(frame, 0, 0);
 
-                drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-                drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+                if (currentTeacherLandmarks) {
+                    let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
+                    let normalizedOffsetX = hologramOffsetX / tCanvas.width;
+                    let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+                    
+                    let offsetLandmarks = filteredLandmarks.map(lm => ({
+                        x: lm.x + normalizedOffsetX,
+                        y: lm.y + normalizedOffsetY,
+                        z: lm.z,
+                        visibility: lm.visibility
+                    }));
+
+                    drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+                    drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+                }
             }
         }
     }
