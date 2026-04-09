@@ -35,7 +35,8 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.45;
+            opacity: 0.45; 
+            transition: opacity 0.3s;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
@@ -49,13 +50,12 @@
         .header { display: flex; justify-content: flex-end; }
         .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
         
-        #sync_display { font-size: 50px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
-        #rank_display { font-size: 20px; color: #ff0; }
+        #sync_display { font-size: 40px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
         
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 60px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; 
+            font-size: 70px; color: #fff; text-shadow: 0 0 20px #f0f, 4px 4px 0 #000; z-index: 20; 
+            white-space: pre-wrap; pointer-events: auto; font-weight: bold;
         }
 
         .overlay { 
@@ -69,27 +69,53 @@
             margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
         }
         .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
-        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
+        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 40px; margin-bottom: 10px; }
+        
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 80%;
+            max-width: 400px;
+            text-align: left;
+            font-size: 24px;
+            margin-top: 20px;
+            background: rgba(0,0,0,0.5);
+            padding: 20px;
+            border: 2px solid #0ff;
+        }
+        .part-label { color: #fff; }
+        .part-score { color: #ff0; text-align: right; }
+        #final_score { font-size: 70px; color: #0ff; text-shadow: 0 0 20px #0ff; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
     <h1>AR SYNCHRO QUEST</h1>
-    <p style="color:#fff;">まずはカメラを起動します。</p>
+    <p style="color:#fff;">ターン制ダンスバトル (BPM: 80)</p>
     <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
     <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
 
 <div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
-    <button class="btn" onclick="startQuest()">MISSION START</button>
+    <button class="btn" onclick="startGame()">GAME START</button>
 </div>
 
 <div id="result_screen" class="overlay" style="display:none;">
-    <h1 style="color:#ff0;">MISSION COMPLETE</h1>
-    <p style="font-size:24px;">TOTAL AVG SYNCHRO</p>
-    <div id="final_score" style="font-size:80px; color:#0ff; margin: 20px 0;">0%</div>
-    <button class="btn" onclick="window.location.href=window.location.href">RETRY</button>
+    <h1 style="color:#ff0;">STAGE CLEAR!</h1>
+    <div style="font-size:20px;">TOTAL SYNCHRO</div>
+    <div id="final_score">0%</div>
+    
+    <div class="result-grid">
+        <div class="part-label">HEAD (頭):</div> <div class="part-score" id="res_head">0%</div>
+        <div class="part-label">L-ARM (左腕):</div> <div class="part-score" id="res_l_arm">0%</div>
+        <div class="part-label">R-ARM (右腕):</div> <div class="part-score" id="res_r_arm">0%</div>
+        <div class="part-label">BODY (胴体):</div> <div class="part-score" id="res_body">0%</div>
+        <div class="part-label">LEGS (脚):</div> <div class="part-score" id="res_legs">0%</div>
+    </div>
+
+    <button class="btn" onclick="window.location.href=window.location.href">REPLAY</button>
 </div>
 
 <div id="video_container">
@@ -105,8 +131,8 @@
     <div class="ui-layer">
         <div class="header">
             <div class="status-box" id="status_ui" style="display:none;">
+                <div style="font-size:14px; color:#fff;">SCORE</div>
                 <div id="sync_display">0%</div>
-                <div id="rank_display">-</div>
             </div>
         </div>
     </div>
@@ -114,35 +140,37 @@
 
 <script>
 let pose, teacherPose, camera, tVideo, tAudio, tCanvas, tCtx, canvasCtx;
-let isPlaying = false;
-let isCounting = false;
 let currentTeacherLandmarks = null;
 let currentUserLandmarks = null;
-let displayScore = 0;
-let scoreHistory = [];
-
-let teacherHistory = []; 
-let teacherMotionWindow = []; 
-let userMotionWindow = []; 
 
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
-// 🌟 カメラの物理的な遅延（ラグ）を打ち消すためのオフセット秒数
-// 音楽をこの秒数だけ遅らせてスタートすることで、画面上の見た目が一致します。
+// 🌟 カメララグ補正（解決策B）
 const CAMERA_LAG_OFFSET = 0.15; 
 
-const CUSTOM_CONNECTIONS = [
-  [0, 11], [0, 12],
-  [11, 12],
-  [11, 13], [13, 15],
-  [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
-  [23, 25], [25, 27],
-  [24, 26], [26, 28]
-];
+// 🌟 音楽の設定（BPM80）
+const BPM = 80;
+const BEAT_INTERVAL = 60 / BPM; // 1拍の秒数 (0.75秒)
+const TURN_DURATION = BEAT_INTERVAL * 4; // 4カウントの秒数 (3.0秒)
+const START_OFFSET = 0.0; // 映像の開始から何秒後に最初の1カウント目が来るか（ズレる場合はここを調整）
 
-const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+let gameState = 'INIT'; // INIT, COUNTDOWN, TEACHER, PLAYER, EVAL, END
+
+const PARTS = {
+    HEAD: [0],
+    L_ARM: [11, 13, 15],
+    R_ARM: [12, 14, 16],
+    BODY: [11, 12, 23, 24],
+    LEGS: [23, 25, 27, 24, 26, 28]
+};
+const ALL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+
+let teacherTurnData = [];
+let playerTurnData = [];
+
+let totalScores = [];
+let partScores = { HEAD: [], L_ARM: [], R_ARM: [], BODY: [], LEGS: [] };
 
 let beepCtx;
 function initBeepAudio() {
@@ -158,17 +186,13 @@ function playBeep(frequency, duration) {
     if (!beepCtx) return;
     const oscillator = beepCtx.createOscillator();
     const gainNode = beepCtx.createGain();
-    
     oscillator.type = 'sine'; 
     oscillator.frequency.value = frequency; 
-    
     gainNode.gain.setValueAtTime(0, beepCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(1, beepCtx.currentTime + 0.05);
+    gainNode.gain.linearRampToValueAtTime(1, beepCtx.currentTime + 0.02);
     gainNode.gain.linearRampToValueAtTime(0, beepCtx.currentTime + duration);
-
     oscillator.connect(gainNode);
     gainNode.connect(beepCtx.destination);
-    
     oscillator.start();
     oscillator.stop(beepCtx.currentTime + duration);
 }
@@ -191,13 +215,8 @@ function initCamera() {
     teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     teacherPose.onResults((results) => { 
         currentTeacherLandmarks = results.poseLandmarks; 
-        
-        if(results.poseLandmarks) {
-            teacherHistory.push(results.poseLandmarks);
-            if(teacherHistory.length > 3) teacherHistory.shift(); 
-
-            teacherMotionWindow.push(results.poseLandmarks);
-            if(teacherMotionWindow.length > 15) teacherMotionWindow.shift(); 
+        if(gameState === 'TEACHER' && results.poseLandmarks) {
+            teacherTurnData.push(getNormalizedJoints(results.poseLandmarks));
         }
     });
 
@@ -227,77 +246,215 @@ function initCamera() {
         document.getElementById('video_container').style.display = 'block';
         document.getElementById('mission_btn_container').style.display = 'block';
     }).catch(e => {
-        alert("カメラの起動に失敗しました。権限を確認してください。");
+        alert("カメラの起動に失敗しました。");
     });
 }
 
-function startQuest() {
+function startGame() {
     initBeepAudio(); 
-    
     document.getElementById('mission_btn_container').style.display = 'none';
     document.getElementById('status_ui').style.display = 'block';
-
-    tAudio.onended = () => {
-        isPlaying = false;
-        tVideo.pause();
-        showResult();
-    };
-
+    
+    gameState = 'COUNTDOWN';
     startCountdown();
 }
 
 function startCountdown() {
-    isCounting = true;
-    let count = 5; 
+    let count = 4; // BPM80に合わせた4カウント
     const msg = document.getElementById('msg_overlay');
     
     tAudio.volume = 0;
     tAudio.play().then(() => {
-        setTimeout(() => {
-            tAudio.pause();
-            tAudio.currentTime = 0;
-            tAudio.volume = 1;
-        }, 100);
+        setTimeout(() => { tAudio.pause(); tAudio.currentTime = 0; tAudio.volume = 1; }, 50);
     });
 
     const timer = setInterval(() => {
         if (count > 0) {
-            msg.innerText = `GET READY!\n${count}`;
+            msg.innerText = `READY\n${count}`;
             playBeep(880, 0.1); 
         } else if (count === 0) {
             msg.innerText = "START!";
             playBeep(1760, 0.4); 
             
-            // 🌟 映像遅延対策：映像を先にスタートし、音楽をCAMERA_LAG_OFFSET分だけ遅らせてスタートする
-            tVideo.currentTime = 0;
-            tAudio.currentTime = 0;
+            clearInterval(timer);
             
+            tVideo.currentTime = START_OFFSET;
+            tAudio.currentTime = START_OFFSET;
+
+            // 🌟 映像を先に再生し、カメラ遅延分だけ音楽を遅らせる
             tVideo.play().then(() => {
                 setTimeout(() => {
-                    tAudio.play().then(() => {
-                        isPlaying = true;
-                        isCounting = false;
-                    });
-                }, CAMERA_LAG_OFFSET * 1000); // 0.15秒後に音楽スタート
-            }).catch(e => console.error("Play error:", e));
-
-        } else {
-            clearInterval(timer);
-            msg.innerText = "";
+                    tAudio.play();
+                    msg.innerText = "";
+                    startTeacherTurn();
+                }, CAMERA_LAG_OFFSET * 1000);
+            });
         }
         count--;
-    }, 1000);
+    }, BEAT_INTERVAL * 1000); // 🌟 カウントダウンもBPM80に同期
+}
+
+function startTeacherTurn() {
+    gameState = 'TEACHER';
+    teacherTurnData = []; 
+    document.getElementById('msg_overlay').innerText = "WATCH!";
+    document.getElementById('msg_overlay').style.color = "#0ff";
+    tCanvas.style.opacity = "0.45"; 
+
+    tVideo.play();
+    tAudio.play();
+
+    // 🌟 TURN_DURATION（3.0秒）後にプレイヤーの番へ
+    setTimeout(() => {
+        tVideo.pause();
+        tAudio.pause();
+        
+        if(tVideo.currentTime >= tVideo.duration - 0.5) {
+            endGame();
+        } else {
+            startPlayerTurn();
+        }
+    }, TURN_DURATION * 1000);
+}
+
+function startPlayerTurn() {
+    gameState = 'PLAYER';
+    playerTurnData = []; 
+    document.getElementById('msg_overlay').innerText = "YOUR\nTURN!";
+    document.getElementById('msg_overlay').style.color = "#f0f";
+    tCanvas.style.opacity = "0.15"; 
+
+    // 🌟 BPM80のメトロノーム
+    let beats = 1;
+    playBeep(1000, 0.05); // 1拍目
+    
+    let metronome = setInterval(() => {
+        playBeep(1000, 0.05);
+        beats++;
+        if(beats >= 4) {
+            clearInterval(metronome);
+        }
+    }, BEAT_INTERVAL * 1000); // 0.75秒ごと
+
+    setTimeout(() => {
+        evaluateTurn();
+    }, TURN_DURATION * 1000);
+}
+
+// 🌟 総運動量（サボり・暴れ検知用）
+function calculateTotalMotion(motionWindow) {
+    if (motionWindow.length < 5) return 0;
+    let totalMotion = 0;
+    ALL_INDICES.forEach(i => {
+        let minX = 999, maxX = -999, minY = 999, maxY = -999;
+        motionWindow.forEach(pose => {
+            if (pose && pose[i]) {
+                if(pose[i].x < minX) minX = pose[i].x;
+                if(pose[i].x > maxX) maxX = pose[i].x;
+                if(pose[i].y < minY) minY = pose[i].y;
+                if(pose[i].y > maxY) maxY = pose[i].y;
+            }
+        });
+        totalMotion += Math.hypot(maxX - minX, maxY - minY);
+    });
+    return totalMotion;
+}
+
+function evaluateTurn() {
+    gameState = 'EVAL';
+    document.getElementById('msg_overlay').innerText = "";
+
+    if (teacherTurnData.length > 5 && playerTurnData.length > 5) {
+        
+        // 🌟 サボり・暴れペナルティ計算
+        let teacherTotalMotion = calculateTotalMotion(teacherTurnData);
+        let userTotalMotion = calculateTotalMotion(playerTurnData);
+        let motionPenalty = 1.0;
+        
+        if (teacherTotalMotion > 0.8) { 
+            let motionRatio = userTotalMotion / teacherTotalMotion;
+            if (motionRatio < 0.4) { 
+                motionPenalty = Math.max(0.1, motionRatio * 1.5); // 棒立ちペナルティ
+            } else if (motionRatio > 2.0) {
+                motionPenalty = Math.max(0.1, 1.5 / motionRatio); // 暴れすぎペナルティ
+            }
+        } else {
+            if (userTotalMotion > 1.5) {
+                motionPenalty = 0.2; // 先生が止まってるのに暴れたペナルティ
+            }
+        }
+
+        let bestOverallScore = 0;
+        let bestPartScoresObj = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+
+        teacherTurnData.forEach(tPose => {
+            let bestMatchForThisFrame = 0;
+            let bestPartsForThisFrame = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+
+            playerTurnData.forEach(uPose => {
+                let currentMatchScore = 0;
+                let currentParts = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
+                let totalPoints = 0;
+
+                for (const [partName, indices] of Object.entries(PARTS)) {
+                    let partDiffSum = 0;
+                    indices.forEach(i => {
+                        if(tPose[i] && uPose[i]) {
+                            let diff = Math.hypot(tPose[i].x - uPose[i].x, tPose[i].y - uPose[i].y);
+                            let penalizedDiff = Math.max(0, diff - 0.1); 
+                            // ズレ0.4（胴体の40%）で0点になるカーブ
+                            let errorRatio = Math.min(1.0, penalizedDiff / 0.4);
+                            let point = 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
+                            partDiffSum += point;
+                        }
+                    });
+                    currentParts[partName] = partDiffSum / indices.length;
+                    currentMatchScore += partDiffSum;
+                    totalPoints += indices.length;
+                }
+
+                let totalAvg = currentMatchScore / totalPoints;
+
+                if (totalAvg > bestMatchForThisFrame) {
+                    bestMatchForThisFrame = totalAvg;
+                    bestPartsForThisFrame = currentParts;
+                }
+            });
+
+            if (bestMatchForThisFrame > bestOverallScore) {
+                bestOverallScore = bestMatchForThisFrame;
+                bestPartScoresObj = bestPartsForThisFrame;
+            }
+        });
+
+        // ペナルティを適用
+        bestOverallScore *= motionPenalty;
+        for (const part in PARTS) {
+            bestPartScoresObj[part] *= motionPenalty;
+        }
+
+        totalScores.push(bestOverallScore);
+        for (const part in PARTS) {
+            partScores[part].push(bestPartScoresObj[part]);
+        }
+
+        document.getElementById('sync_display').innerText = `${Math.round(bestOverallScore)}%`;
+    }
+
+    startTeacherTurn();
+}
+
+function endGame() {
+    gameState = 'END';
+    showResult();
 }
 
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
-    if (tVideo.readyState >= 2) {
-        // 🌟 音ズレ番犬システム：映像のタイムが「音楽のタイム＋ラグ補正分」とズレていたら強制補正
-        if (isPlaying) {
-            let targetVideoTime = tAudio.currentTime + CAMERA_LAG_OFFSET;
-            if (Math.abs(tVideo.currentTime - targetVideoTime) > 0.15) {
-                tVideo.currentTime = targetVideoTime;
-            }
+    if (tVideo.readyState >= 2 && gameState === 'TEACHER') {
+        // 音ズレ補正番犬
+        if (Math.abs(tVideo.currentTime - (tAudio.currentTime + CAMERA_LAG_OFFSET)) > 0.15) {
+            tVideo.currentTime = tAudio.currentTime + CAMERA_LAG_OFFSET;
         }
 
         if (tVideo.currentTime !== lastTeacherVideoTime) {
@@ -311,12 +468,17 @@ async function trackTeacherPose() {
 function filterEssentialLandmarks(landmarks) {
     if(!landmarks) return null;
     return landmarks.map((lm, index) => {
-        if (!EVAL_INDICES.includes(index)) {
+        if (!ALL_INDICES.includes(index)) {
             return { ...lm, visibility: 0 }; 
         }
         return lm;
     });
 }
+
+const DRAW_CONNECTIONS = [
+  [0, 11], [0, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]
+];
 
 let lastChromaTime = -1;
 function processChromaKey() {
@@ -354,7 +516,7 @@ function processChromaKey() {
                     visibility: lm.visibility
                 }));
 
-                drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+                drawConnectors(tCtx, offsetLandmarks, DRAW_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
                 drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
             }
         }
@@ -375,16 +537,15 @@ function onUserResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     
     if (currentUserLandmarks) {
-        userMotionWindow.push(currentUserLandmarks);
-        if(userMotionWindow.length > 15) userMotionWindow.shift();
+        if (gameState === 'PLAYER') {
+            playerTurnData.push(getNormalizedJoints(currentUserLandmarks));
+        }
 
         let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
-        drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawConnectors(canvasCtx, filteredLandmarks, DRAW_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
         drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
     canvasCtx.restore();
-    
-    updateScore();
 }
 
 function getNormalizedJoints(pose) {
@@ -398,7 +559,7 @@ function getNormalizedJoints(pose) {
     let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
 
     let normPose = {};
-    EVAL_INDICES.forEach(i => {
+    ALL_INDICES.forEach(i => {
         if (pose[i]) {
             normPose[i] = {
                 x: (pose[i].x - midShoulderX) / torsoLength,
@@ -409,113 +570,18 @@ function getNormalizedJoints(pose) {
     return normPose;
 }
 
-function calculateTotalMotion(motionWindow) {
-    if (motionWindow.length < 5) return 0;
-    let totalMotion = 0;
-    EVAL_INDICES.forEach(i => {
-        let minX = 999, maxX = -999, minY = 999, maxY = -999;
-        motionWindow.forEach(pose => {
-            let n = getNormalizedJoints(pose);
-            if (n && n[i]) {
-                if(n[i].x < minX) minX = n[i].x;
-                if(n[i].x > maxX) maxX = n[i].x;
-                if(n[i].y < minY) minY = n[i].y;
-                if(n[i].y > maxY) maxY = n[i].y;
-            }
-        });
-        totalMotion += Math.hypot(maxX - minX, maxY - minY);
-    });
-    return totalMotion;
-}
-
-function updateScore() {
-    if (isCounting || !isPlaying) return;
-    
-    let rawScore = 0;
-    if (teacherHistory.length > 0 && currentUserLandmarks && teacherMotionWindow.length > 10 && userMotionWindow.length > 10) {
-        
-        let uNorm = getNormalizedJoints(currentUserLandmarks);
-        if (!uNorm) return;
-
-        let teacherTotalMotion = calculateTotalMotion(teacherMotionWindow);
-        let userTotalMotion = calculateTotalMotion(userMotionWindow);
-        
-        let motionPenalty = 1.0;
-        if (teacherTotalMotion > 0.8) { 
-            let motionRatio = userTotalMotion / teacherTotalMotion;
-            if (motionRatio < 0.5) { 
-                motionPenalty = Math.max(0.1, motionRatio * 1.5); 
-            } else if (motionRatio > 1.8) {
-                motionPenalty = Math.max(0.1, 1.5 / motionRatio);
-            }
-        } else {
-            if (userTotalMotion > 1.5) {
-                motionPenalty = 0.2; 
-            }
-        }
-
-        let jointWeights = {};
-        EVAL_INDICES.forEach(i => {
-            let minX = 999, maxX = -999, minY = 999, maxY = -999;
-            teacherMotionWindow.forEach(pastPose => {
-                let n = getNormalizedJoints(pastPose);
-                if (n && n[i]) {
-                    if(n[i].x < minX) minX = n[i].x;
-                    if(n[i].x > maxX) maxX = n[i].x;
-                    if(n[i].y < minY) minY = n[i].y;
-                    if(n[i].y > maxY) maxY = n[i].y;
-                }
-            });
-            let motion = Math.hypot(maxX - minX, maxY - minY);
-            jointWeights[i] = Math.max(0.1, Math.min(1.0, motion / 0.2)); 
-        });
-
-        let bestScore = 0;
-
-        teacherHistory.forEach(pastTeacher => {
-            let tNorm = getNormalizedJoints(pastTeacher);
-            if (!tNorm) return;
-
-            let weightedDiffSum = 0;
-            let totalWeight = 0;
-
-            EVAL_INDICES.forEach(i => {
-                let diff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                let penalizedDiff = Math.max(0, diff - 0.1); 
-                
-                let weight = jointWeights[i];
-                weightedDiffSum += penalizedDiff * weight;
-                totalWeight += weight;
-            });
-            
-            let avgDiff = totalWeight > 0 ? (weightedDiffSum / totalWeight) : 0;
-            let maxAllowedDiff = 0.4;
-            let errorRatio = Math.min(1.0, avgDiff / maxAllowedDiff);
-            let tempScore = 100 * (1.0 - Math.pow(errorRatio, 2.0)); 
-            
-            if (tempScore > bestScore) bestScore = tempScore;
-        });
-
-        rawScore = bestScore * motionPenalty;
-        scoreHistory.push(rawScore);
-    }
-
-    displayScore += (rawScore - displayScore) * 0.15;
-    const stepScore = Math.round(displayScore / 5) * 5;
-    document.getElementById('sync_display').innerText = `${stepScore}%`;
-    
-    let rank = "POOR";
-    if (stepScore > 80) rank = "PERFECT!!";
-    else if (stepScore > 60) rank = "GREAT!";
-    else if (stepScore > 40) rank = "GOOD";
-    document.getElementById('rank_display').innerText = rank;
-}
-
 function showResult() {
-    const avg = scoreHistory.length > 0 ? scoreHistory.reduce((a, b) => a + b) / scoreHistory.length : 0;
     document.getElementById('video_container').style.display = 'none';
     document.getElementById('result_screen').style.display = 'flex';
-    document.getElementById('final_score').innerText = `${Math.round(avg)}%`;
+
+    const totalAvg = totalScores.length > 0 ? totalScores.reduce((a, b) => a + b) / totalScores.length : 0;
+    document.getElementById('final_score').innerText = `${Math.round(totalAvg)}%`;
+
+    for (const part in PARTS) {
+        const pScores = partScores[part];
+        const pAvg = pScores.length > 0 ? pScores.reduce((a, b) => a + b) / pScores.length : 0;
+        document.getElementById(`res_${part.toLowerCase()}`).innerText = `${Math.round(pAvg)}%`;
+    }
 }
 </script>
 </body>
