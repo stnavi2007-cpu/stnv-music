@@ -29,7 +29,7 @@
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.45;
+            opacity: 0.45; 
             transition: opacity 0.3s;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
@@ -40,17 +40,17 @@
             position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
         }
         
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 10px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
-        /* 🌟 修正：右上のスコアボックスをコンパクトに */
-        .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 5px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 80px; }
         
-        /* 🌟 修正：スコア表示のフォントサイズを半分（20px）に */
+        /* 🌟 右上のスコアをコンパクトに調整 */
+        .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 4px 8px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 60px; text-align: center; }
         #sync_display { font-size: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; font-weight: bold; }
         
+        /* 🌟 カウントダウン等の文字調整 */
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 70px; color: #fff; text-shadow: 0 0 20px #f0f, 4px 4px 0 #000; z-index: 20; 
+            font-size: 80px; color: #fff; text-shadow: 0 0 20px #f0f, 4px 4px 0 #000; z-index: 20; 
             white-space: pre-wrap; pointer-events: auto; font-weight: bold; text-align: center;
         }
 
@@ -60,47 +60,49 @@
             z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
         }
         .btn { 
-            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
-            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
-            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
+            padding: 12px 30px; background: #00bcd4; color: #000; border: 3px solid #fff; 
+            font-family: 'DotGothic16'; font-size: 20px; font-weight: bold; cursor: pointer; 
+            margin-top: 20px; box-shadow: 3px 3px 0px 0px #000; transition: 0.1s; pointer-events: auto;
         }
-        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
-        h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 40px; margin-bottom: 10px; }
+        .btn:active { transform: translate(3px, 3px); box-shadow: 0px 0px 0px 0px #000; }
+        h1 { color: #0ff; text-shadow: 3px 3px 0 #000, 0 0 10px #0ff; font-size: 32px; margin-bottom: 5px; text-align: center; }
         
+        /* 🌟 スマホに収まる部位別スコア表示 */
         .result-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            width: 80%;
-            max-width: 400px;
+            gap: 10px 20px;
+            width: 90%;
+            max-width: 350px;
             text-align: left;
-            font-size: 24px;
-            margin-top: 20px;
+            font-size: 18px;
+            margin-top: 15px;
             background: rgba(0,0,0,0.5);
-            padding: 20px;
+            padding: 15px;
             border: 2px solid #0ff;
+            box-sizing: border-box;
         }
         .part-label { color: #fff; }
         .part-score { color: #ff0; text-align: right; }
-        #final_score { font-size: 70px; color: #0ff; text-shadow: 0 0 20px #0ff; margin-top: 10px; }
+        #final_score { font-size: 60px; color: #0ff; text-shadow: 0 0 20px #0ff; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
     <h1>AR SYNCHRO QUEST</h1>
-    <p style="color:#fff;">TURN BATTLE</p>
+    <p style="color:#fff; font-size: 14px;">TURN BATTLE</p>
     <button class="btn" id="btn_camera_start" onclick="initCamera()">CAMERA START</button>
     <p id="loading_msg" style="display:none; color:#0ff; margin-top:20px;">AI Loading...</p>
 </div>
 
-<div id="mission_btn_container" style="display:none; position:absolute; bottom:50px; left:50%; transform:translateX(-50%); z-index:50;">
+<div id="mission_btn_container" style="display:none; position:absolute; bottom:40px; left:50%; transform:translateX(-50%); z-index:50;">
     <button class="btn" onclick="startGame()">GAME START</button>
 </div>
 
 <div id="result_screen" class="overlay" style="display:none;">
     <h1 style="color:#ff0;">STAGE CLEAR!</h1>
-    <div style="font-size:20px;">TOTAL SYNCHRO</div>
+    <div style="font-size:16px;">TOTAL SYNCHRO</div>
     <div id="final_score">0%</div>
     
     <div class="result-grid">
@@ -153,6 +155,10 @@ const PARTS = {
     LEGS: [23, 25, 27, 24, 26, 28]
 };
 const ALL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+const DRAW_CONNECTIONS = [
+  [0, 11], [0, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]
+];
 
 let teacherTurnData = [];
 let playerTurnData = [];
@@ -160,7 +166,7 @@ let playerTurnData = [];
 let totalScores = [];
 let partScores = { HEAD: [], L_ARM: [], R_ARM: [], BODY: [], LEGS: [] };
 let turnCount = 0;
-const MAX_TURNS = 4; 
+const MAX_TURNS = 4; // 動画再生→生徒のターン を繰り返す回数
 
 let beepCtx;
 function initBeepAudio() {
@@ -201,9 +207,15 @@ function initCamera() {
     tVideo = document.getElementById('teacher_video');
     tAudio = document.getElementById('bgm_audio'); 
 
+    // 🌟 動画読み込み完了時に尺を取得し、最初の1フレーム目をホログラム表示
     tVideo.onloadedmetadata = () => {
         if (tVideo.duration > 0) {
-            turnDuration = tVideo.duration;
+            turnDuration = tVideo.duration; // 用意された4カウント動画の尺をターンの長さに設定
+            tVideo.currentTime = 0.05; // 初期ガイド用に少しだけ進める
+            setTimeout(async () => {
+                // AIに最初のフレームを読ませて骨格を描画させる
+                await teacherPose.send({image: tVideo});
+            }, 1000);
         }
     };
 
@@ -232,6 +244,8 @@ function initCamera() {
         document.getElementById('start_screen').style.display = 'none';
         document.getElementById('video_container').style.display = 'block';
         document.getElementById('mission_btn_container').style.display = 'block';
+        // 常にホログラムを描画開始
+        processChromaKey();
     }).catch(e => {
         alert("カメラの起動に失敗しました。");
     });
@@ -248,7 +262,7 @@ function startGame() {
 }
 
 function startCountdown() {
-    let count = 3; 
+    let count = 5; // 🌟 5カウントに変更
     const msg = document.getElementById('msg_overlay');
     
     tAudio.volume = 0;
@@ -258,9 +272,10 @@ function startCountdown() {
 
     const timer = setInterval(() => {
         if (count > 0) {
-            msg.innerText = count;
+            msg.innerText = count; // 数字だけ
+            playBeep(880, 0.1); 
         } else if (count === 0) {
-            // 🌟 修正：スタートの時の「チーン（高音）」や余計な文字を削除。即座に先生ターンへ移行
+            // 🌟 0になったら文字も「チーン」音もなしで即スタート
             msg.innerText = "";
             clearInterval(timer);
             startTeacherTurn();
@@ -284,6 +299,7 @@ function startTeacherTurn() {
     tVideo.play();
     tAudio.play();
 
+    // 動画が終了したら生徒のターンへ
     setTimeout(() => {
         tVideo.pause();
         tAudio.pause();
@@ -296,12 +312,13 @@ function startPlayerTurn() {
     playerTurnData = []; 
     tCanvas.style.opacity = "0.15"; 
 
+    // 動画の尺を4等分してメトロノームを鳴らす
     let interval = (turnDuration * 1000) / 4;
     let beats = 1;
-    playBeep(1000, 0.05); 
+    playBeep(880, 0.05); 
     
     let metronome = setInterval(() => {
-        playBeep(1000, 0.05);
+        playBeep(880, 0.05);
         beats++;
         if(beats >= 4) clearInterval(metronome);
     }, interval);
@@ -311,27 +328,8 @@ function startPlayerTurn() {
     }, turnDuration * 1000);
 }
 
-function calculateTotalMotion(dataArray) {
-    if (dataArray.length < 5) return 0;
-    let totalMotion = 0;
-    ALL_INDICES.forEach(i => {
-        let minX = 999, maxX = -999, minY = 999, maxY = -999;
-        dataArray.forEach(pose => {
-            if (pose && pose[i]) {
-                if(pose[i].x < minX) minX = pose[i].x;
-                if(pose[i].x > maxX) maxX = pose[i].x;
-                if(pose[i].y < minY) minY = pose[i].y;
-                if(pose[i].y > maxY) maxY = pose[i].y;
-            }
-        });
-        totalMotion += Math.hypot(maxX - minX, maxY - minY);
-    });
-    return totalMotion;
-}
-
 function evaluateTurn() {
     gameState = 'EVAL';
-
     let finalTurnScore = 0;
     let finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
@@ -393,17 +391,6 @@ function evaluateTurn() {
             finalPartScores[part] = partScoreSums[part] / N;
         }
 
-        let teacherTotalMotion = calculateTotalMotion(teacherTurnData);
-        let userTotalMotion = calculateTotalMotion(playerTurnData);
-        
-        if (teacherTotalMotion > 1.0) { 
-            let motionRatio = userTotalMotion / teacherTotalMotion;
-            if (motionRatio < 0.4) { 
-                let penalty = Math.max(0.0, motionRatio * 2.0);
-                finalTurnScore *= penalty;
-                for (const part in PARTS) finalPartScores[part] *= penalty;
-            }
-        }
     } else {
         finalTurnScore = 0;
         finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
@@ -418,7 +405,7 @@ function evaluateTurn() {
     turnCount++;
     setTimeout(() => {
         startTeacherTurn();
-    }, 1500); 
+    }, 1000); 
 }
 
 function endGame() {
@@ -428,8 +415,7 @@ function endGame() {
 
 let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
-    // 🌟 修正：動画が再生されている（先生のターン）時のみAI解析を実行し、それ以外はストップして負荷を減らす
-    if (tVideo.readyState >= 2 && gameState === 'TEACHER') {
+    if (tVideo.readyState >= 2 && (gameState === 'TEACHER' || gameState === 'INIT')) {
         if (tVideo.currentTime !== lastTeacherVideoTime) {
             lastTeacherVideoTime = tVideo.currentTime;
             await teacherPose.send({image: tVideo});
@@ -448,27 +434,22 @@ function filterEssentialLandmarks(landmarks) {
     });
 }
 
-const DRAW_CONNECTIONS = [
-  [0, 11], [0, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]
-];
-
-// 🌟 修正：先生の描画データを保存しておく変数。
-// 動画が停止している時も、このデータを元に毎フレーム再描画を行う。
+let lastChromaTime = -1;
 let lastTeacherFrameData = null;
 let lastTeacherFilteredLandmarks = null;
 
 function processChromaKey() {
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
         
-        if (gameState === 'TEACHER') {
-            // 先生のターン中：動画から新しいフレームを取得して処理
+        // 動画のフレームが更新された時だけピクセルデータを再取得
+        if (tVideo.currentTime !== lastChromaTime) {
+            lastChromaTime = tVideo.currentTime;
+            
             if (tCanvas.width !== tVideo.videoWidth) {
                 tCanvas.width = tVideo.videoWidth;
                 tCanvas.height = tVideo.videoHeight;
             }
             
-            // 裏のキャンバスに動画を描画してピクセルデータを取得
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = tVideo.videoWidth;
             tempCanvas.height = tVideo.videoHeight;
@@ -476,7 +457,6 @@ function processChromaKey() {
             tempCtx.drawImage(tVideo, 0, 0, tempCanvas.width, tempCanvas.height);
             let frame = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
             
-            // クロマキー処理
             for (let i = 0; i < frame.data.length / 4; i++) {
                 let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
                 let diff = g - Math.max(r, b);
@@ -484,8 +464,6 @@ function processChromaKey() {
                     frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
                 }
             }
-            
-            // 最後のフレームデータを保存
             lastTeacherFrameData = frame;
             
             if (currentTeacherLandmarks) {
@@ -502,17 +480,14 @@ function processChromaKey() {
             }
         }
         
-        // --- 描画処理（常に実行） ---
+        // 常に描画をキープする
         tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
         
         if (lastTeacherFrameData) {
-            // 保存しておいたクロマキー済みのフレームを描画
-            // putImageDataは位置をずらせないので、一時キャンバスに書いてからdrawImageでずらして描画
             const displayCanvas = document.createElement('canvas');
             displayCanvas.width = tCanvas.width;
             displayCanvas.height = tCanvas.height;
             displayCanvas.getContext('2d').putImageData(lastTeacherFrameData, 0, 0);
-            
             tCtx.drawImage(displayCanvas, hologramOffsetX, hologramOffsetY);
         }
 
@@ -540,7 +515,6 @@ function onUserResults(results) {
         if (gameState === 'PLAYER') {
             playerTurnData.push(getNormalizedJoints(currentUserLandmarks));
         }
-
         let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
         drawConnectors(canvasCtx, filteredLandmarks, DRAW_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
         drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
@@ -550,14 +524,11 @@ function onUserResults(results) {
 
 function getNormalizedJoints(pose) {
     if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
-    
     let midShoulderX = (pose[11].x + pose[12].x) / 2;
     let midShoulderY = (pose[11].y + pose[12].y) / 2;
     let midHipX = (pose[23].x + pose[24].x) / 2;
     let midHipY = (pose[23].y + pose[24].y) / 2;
-    
     let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
-
     let normPose = {};
     ALL_INDICES.forEach(i => {
         if (pose[i]) {
@@ -583,6 +554,9 @@ function showResult() {
         document.getElementById(`res_${part.toLowerCase()}`).innerText = `${Math.round(pAvg)}%`;
     }
 }
+
+// 初期化（trackTeacherPoseとprocessChromaKeyはループで回し続ける）
+requestAnimationFrame(trackTeacherPose);
 </script>
 </body>
 </html>
