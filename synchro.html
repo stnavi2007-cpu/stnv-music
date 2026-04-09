@@ -238,7 +238,7 @@ function startCountdown() {
     let count = 8;
     const msg = document.getElementById('msg_overlay');
     
-    // カウントダウン中も動画は0.01秒の位置で止めておく
+    // カウントダウン中も動画は0.1秒の位置で止めておく
     tVideo.currentTime = 0.01;
 
     const timer = setInterval(() => {
