@@ -508,4 +508,55 @@ function onUserResults(results) {
 
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    canvasCtx.drawImage(results.image, 0,
+    canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    
+    if (currentUserLandmarks) {
+        if (gameState === 'PLAYER') {
+            playerTurnData.push(getNormalizedJoints(currentUserLandmarks));
+        }
+
+        let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
+        drawConnectors(canvasCtx, filteredLandmarks, DRAW_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
+        drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+    }
+    canvasCtx.restore();
+}
+
+function getNormalizedJoints(pose) {
+    if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
+    
+    let midShoulderX = (pose[11].x + pose[12].x) / 2;
+    let midShoulderY = (pose[11].y + pose[12].y) / 2;
+    let midHipX = (pose[23].x + pose[24].x) / 2;
+    let midHipY = (pose[23].y + pose[24].y) / 2;
+    
+    let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
+
+    let normPose = {};
+    ALL_INDICES.forEach(i => {
+        if (pose[i]) {
+            normPose[i] = {
+                x: (pose[i].x - midShoulderX) / torsoLength,
+                y: (pose[i].y - midShoulderY) / torsoLength
+            };
+        }
+    });
+    return normPose;
+}
+
+function showResult() {
+    document.getElementById('video_container').style.display = 'none';
+    document.getElementById('result_screen').style.display = 'flex';
+
+    const totalAvg = totalScores.length > 0 ? totalScores.reduce((a, b) => a + b) / totalScores.length : 0;
+    document.getElementById('final_score').innerText = `${Math.round(totalAvg)}%`;
+
+    for (const part in PARTS) {
+        const pScores = partScores[part];
+        const pAvg = pScores.length > 0 ? pScores.reduce((a, b) => a + b) / pScores.length : 0;
+        document.getElementById(`res_${part.toLowerCase()}`).innerText = `${Math.round(pAvg)}%`;
+    }
+}
+</script>
+</body>
+</html>
