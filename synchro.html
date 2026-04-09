@@ -44,7 +44,8 @@
         .header { display: flex; justify-content: flex-end; }
         .status-box { background: rgba(0, 0, 0, 0.7); border: 4px solid #0ff; padding: 10px 20px; box-shadow: 4px 4px 0 rgba(0,0,0,0.5); min-width: 120px; }
         
-        #sync_display { font-size: 40px; color: #0ff; text-shadow: 0 0 15px #0ff; font-weight: bold; }
+        /* 🌟 右上のスコア表示のフォントサイズを半分（40px -> 20px）に縮小 */
+        #sync_display { font-size: 20px; color: #0ff; text-shadow: 0 0 10px #0ff; font-weight: bold; }
         
         #msg_overlay { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
@@ -217,7 +218,6 @@ function initCamera() {
 
     tVideo.muted = true;
     tVideo.playsInline = true;
-    // 最初の読み込み時の再生をやめて、スタート時にのみ再生するよう変更（ラグ軽減）
 
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
@@ -337,8 +337,8 @@ function evaluateTurn() {
     let finalTurnScore = 0;
     let finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
 
-    // 🌟 誰も映っていない・データが少なすぎる場合は全て0点（MISS）
-    if (teacherTurnData.length > 5 && playerTurnData.length > 10) {
+    let expectedFrames = 30 * turnDuration; 
+    if (teacherTurnData.length > 5 && playerTurnData.length > (expectedFrames * 0.3)) {
         
         let N = teacherTurnData.length;
         let M = playerTurnData.length;
@@ -406,9 +406,11 @@ function evaluateTurn() {
                 for (const part in PARTS) finalPartScores[part] *= penalty;
             }
         }
+    } else {
+        finalTurnScore = 0;
+        finalPartScores = { HEAD:0, L_ARM:0, R_ARM:0, BODY:0, LEGS:0 };
     }
 
-    // 0点処理（誰もいない時）もここで記録される
     totalScores.push(finalTurnScore);
     for (const part in PARTS) {
         partScores[part].push(finalPartScores[part]);
@@ -454,7 +456,7 @@ const DRAW_CONNECTIONS = [
 
 let lastChromaTime = -1;
 function processChromaKey() {
-    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0 && gameState === 'TEACHER') {
+    if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
         if (tVideo.currentTime !== lastChromaTime) {
             lastChromaTime = tVideo.currentTime;
             
@@ -492,9 +494,7 @@ function processChromaKey() {
                 drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
             }
         }
-    } else if (gameState !== 'TEACHER') {
-        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-    }
+    } 
     requestAnimationFrame(processChromaKey);
 }
 
