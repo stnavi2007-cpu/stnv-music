@@ -42,7 +42,9 @@
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
 
-        video { display: none; }
+        video { 
+            position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
+        }
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
@@ -118,19 +120,20 @@ let currentUserLandmarks = null;
 let displayScore = 0;
 let scoreHistory = [];
 
-// 🌟 タイムラグ吸収用：先生の直近10フレームを保存する配列
 let teacherHistory = []; 
 
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
+// 🌟 修正：手先・足先の余計な接続を削除。13点のみ！
 const CUSTOM_CONNECTIONS = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
-  [23, 25], [24, 26], [25, 27], [26, 28],
-  [27, 31], [28, 32], [27, 29], [28, 30], [29, 31], [30, 32],
-  [15, 21], [16, 22], [15, 17], [16, 18], [15, 19], [16, 20], [17, 19], [18, 20],
-  [0, 11], [0, 12]
+  [0, 11], [0, 12],             // 鼻〜肩
+  [11, 12],                     // 両肩
+  [11, 13], [13, 15],           // 左腕（肩〜ヒジ〜手首）
+  [12, 14], [14, 16],           // 右腕（肩〜ヒジ〜手首）
+  [11, 23], [12, 24], [23, 24], // 胴体
+  [23, 25], [25, 27],           // 左脚（腰〜ヒザ〜足首）
+  [24, 26], [26, 28]            // 右脚（腰〜ヒザ〜足首）
 ];
 
 let audioCtx;
@@ -179,10 +182,9 @@ function initCamera() {
     teacherPose.onResults((results) => { 
         currentTeacherLandmarks = results.poseLandmarks; 
         
-        // 🌟 先生の骨格が取れたら、ラグ吸収用に履歴に保存（最新10フレーム＝約0.3秒分）
         if(results.poseLandmarks) {
             teacherHistory.push(results.poseLandmarks);
-            if(teacherHistory.length > 10) teacherHistory.shift();
+            if(teacherHistory.length > 3) teacherHistory.shift();
         }
     });
 
@@ -236,7 +238,14 @@ function startCountdown() {
     let count = 8;
     const msg = document.getElementById('msg_overlay');
     
-    tVideo.currentTime = 0.5;
+    tVideo.volume = 0;
+    tVideo.play().then(() => {
+        setTimeout(() => {
+            tVideo.pause();
+            tVideo.currentTime = 0;
+            tVideo.volume = 1;
+        }, 100);
+    });
 
     const timer = setInterval(() => {
         if (count > 0) {
@@ -260,59 +269,73 @@ function startCountdown() {
     }, 1000);
 }
 
+// 🌟 修正：重すぎるAI解析を「動画の時間が進んだ時」だけに制限し、音ズレとフリーズを防止！
+let lastTeacherVideoTime = -1;
 async function trackTeacherPose() {
     if (tVideo.readyState >= 2) {
-        if (!tVideo.paused || !currentTeacherLandmarks) {
+        if (tVideo.currentTime !== lastTeacherVideoTime) {
+            lastTeacherVideoTime = tVideo.currentTime;
             await teacherPose.send({image: tVideo});
         }
     }
     requestAnimationFrame(trackTeacherPose);
 }
 
-function filterFaceLandmarks(landmarks) {
+// 🌟 修正：必要な13点以外をすべて消去するフィルター
+function filterEssentialLandmarks(landmarks) {
     if(!landmarks) return null;
+    
+    // 描画・計算に使うインデックスのリスト
+    const keepIndices = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+    
     return landmarks.map((lm, index) => {
-        if (index >= 1 && index <= 10) {
-            return { ...lm, visibility: 0 };
+        if (!keepIndices.includes(index)) {
+            return { ...lm, visibility: 0 }; 
         }
         return lm;
     });
 }
 
+// 🌟 修正：重すぎる透過処理も「動画の時間が進んだ時」だけに制限
+let lastChromaTime = -1;
 function processChromaKey() {
     if (tVideo.readyState >= 2 && tVideo.videoWidth > 0) {
-        if (tCanvas.width !== tVideo.videoWidth) {
-            tCanvas.width = tVideo.videoWidth;
-            tCanvas.height = tVideo.videoHeight;
-        }
-        
-        tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
-        tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
-        let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
-        
-        for (let i = 0; i < frame.data.length / 4; i++) {
-            let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
-            let diff = g - Math.max(r, b);
-            if (diff > 15) { 
-                frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
-            }
-        }
-        tCtx.putImageData(frame, 0, 0);
-
-        if (currentTeacherLandmarks) {
-            let filteredLandmarks = filterFaceLandmarks(currentTeacherLandmarks);
-            let normalizedOffsetX = hologramOffsetX / tCanvas.width;
-            let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+        if (tVideo.currentTime !== lastChromaTime) {
+            lastChromaTime = tVideo.currentTime;
             
-            let offsetLandmarks = filteredLandmarks.map(lm => ({
-                x: lm.x + normalizedOffsetX,
-                y: lm.y + normalizedOffsetY,
-                z: lm.z,
-                visibility: lm.visibility
-            }));
+            if (tCanvas.width !== tVideo.videoWidth) {
+                tCanvas.width = tVideo.videoWidth;
+                tCanvas.height = tVideo.videoHeight;
+            }
+            
+            tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
+            tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
+            let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
+            
+            for (let i = 0; i < frame.data.length / 4; i++) {
+                let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
+                let diff = g - Math.max(r, b);
+                if (diff > 15) { 
+                    frame.data[i * 4 + 3] = Math.max(0, 255 - (diff * 4)); 
+                }
+            }
+            tCtx.putImageData(frame, 0, 0);
 
-            drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
-            drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+            if (currentTeacherLandmarks) {
+                let filteredLandmarks = filterEssentialLandmarks(currentTeacherLandmarks);
+                let normalizedOffsetX = hologramOffsetX / tCanvas.width;
+                let normalizedOffsetY = hologramOffsetY / tCanvas.height;
+                
+                let offsetLandmarks = filteredLandmarks.map(lm => ({
+                    x: lm.x + normalizedOffsetX,
+                    y: lm.y + normalizedOffsetY,
+                    z: lm.z,
+                    visibility: lm.visibility
+                }));
+
+                drawConnectors(tCtx, offsetLandmarks, CUSTOM_CONNECTIONS, {color: '#00ffff', lineWidth: 4});
+                drawLandmarks(tCtx, offsetLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+            }
         }
     }
     requestAnimationFrame(processChromaKey);
@@ -331,7 +354,7 @@ function onUserResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     
     if (currentUserLandmarks) {
-        let filteredLandmarks = filterFaceLandmarks(currentUserLandmarks);
+        let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
         drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
         drawLandmarks(canvasCtx, filteredLandmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
     }
@@ -340,34 +363,39 @@ function onUserResults(results) {
     updateScore();
 }
 
-function calculateAngle(a, b, c) {
-    let rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-    let deg = Math.abs(rad * 180 / Math.PI);
-    return deg > 180 ? 360 - deg : deg;
+function getVectorAngle(p1, p2) {
+    return Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
 }
 
 function updateScore() {
     if (isCounting || !isPlaying) return;
     
     let rawScore = 0;
-    // 🌟 修正：タイムラグ吸収のため、先生の「過去0.3秒間の動き」の中で一番点数が高いものを探す
     if (teacherHistory.length > 0 && currentUserLandmarks) {
-        const joints = [[11,13,15],[12,14,16],[23,25,27],[24,26,28],[11,23,25],[12,24,26]];
+        // 🌟 修正：比較する骨のペアも、必要な部分だけに厳選
+        const bones = [
+            [11, 13], [13, 15], // 左腕
+            [12, 14], [14, 16], // 右腕
+            [23, 25], [25, 27], // 左脚
+            [24, 26], [26, 28]  // 右脚
+        ];
+        
         let bestScore = 0;
 
         teacherHistory.forEach(pastTeacher => {
             let diffSum = 0;
-            joints.forEach(j => {
-                let tA = calculateAngle(pastTeacher[j[0]], pastTeacher[j[1]], pastTeacher[j[2]]);
-                let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
+            bones.forEach(b => {
+                let tAngle = getVectorAngle(pastTeacher[b[0]], pastTeacher[b[1]]);
+                let uAngle = getVectorAngle(currentUserLandmarks[b[0]], currentUserLandmarks[b[1]]);
                 
-                let angleDiff = Math.abs(tA - uA);
-                // 🌟 修正：10度以内のズレは「完璧」とみなし、減点対象から外す（ノイズ対策）
-                let penalizedDiff = Math.max(0, angleDiff - 10);
+                let angleDiff = Math.abs(tAngle - uAngle);
+                if (angleDiff > 180) angleDiff = 360 - angleDiff;
+                
+                let penalizedDiff = Math.max(0, angleDiff - 15);
                 diffSum += penalizedDiff;
             });
-            // 🌟 修正：減点倍率を2.2から1.2に緩和
-            let tempScore = Math.max(0, 100 - (diffSum / joints.length * 1.2));
+            
+            let tempScore = Math.max(0, 100 - (diffSum / bones.length * 1.5));
             if (tempScore > bestScore) bestScore = tempScore;
         });
 
