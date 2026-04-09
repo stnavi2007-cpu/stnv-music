@@ -15,6 +15,7 @@
             margin: 0; overflow: hidden; text-align: center; 
         }
         
+        /* 走査線エフェクト */
         body::after {
             content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
@@ -41,9 +42,7 @@
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
         }
 
-        video { 
-            position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
-        }
+        video { display: none; }
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
@@ -119,6 +118,9 @@ let currentUserLandmarks = null;
 let displayScore = 0;
 let scoreHistory = [];
 
+// 🌟 タイムラグ吸収用：先生の直近10フレームを保存する配列
+let teacherHistory = []; 
+
 let hologramOffsetX = +60; 
 let hologramOffsetY = +100;
 
@@ -176,6 +178,12 @@ function initCamera() {
     teacherPose.setOptions({ modelComplexity: 0, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     teacherPose.onResults((results) => { 
         currentTeacherLandmarks = results.poseLandmarks; 
+        
+        // 🌟 先生の骨格が取れたら、ラグ吸収用に履歴に保存（最新10フレーム＝約0.3秒分）
+        if(results.poseLandmarks) {
+            teacherHistory.push(results.poseLandmarks);
+            if(teacherHistory.length > 10) teacherHistory.shift();
+        }
     });
 
     tVideo.muted = true;
@@ -342,15 +350,28 @@ function updateScore() {
     if (isCounting || !isPlaying) return;
     
     let rawScore = 0;
-    if (currentTeacherLandmarks && currentUserLandmarks) {
+    // 🌟 修正：タイムラグ吸収のため、先生の「過去0.3秒間の動き」の中で一番点数が高いものを探す
+    if (teacherHistory.length > 0 && currentUserLandmarks) {
         const joints = [[11,13,15],[12,14,16],[23,25,27],[24,26,28],[11,23,25],[12,24,26]];
-        let diffSum = 0;
-        joints.forEach(j => {
-            let tA = calculateAngle(currentTeacherLandmarks[j[0]], currentTeacherLandmarks[j[1]], currentTeacherLandmarks[j[2]]);
-            let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
-            diffSum += Math.abs(tA - uA);
+        let bestScore = 0;
+
+        teacherHistory.forEach(pastTeacher => {
+            let diffSum = 0;
+            joints.forEach(j => {
+                let tA = calculateAngle(pastTeacher[j[0]], pastTeacher[j[1]], pastTeacher[j[2]]);
+                let uA = calculateAngle(currentUserLandmarks[j[0]], currentUserLandmarks[j[1]], currentUserLandmarks[j[2]]);
+                
+                let angleDiff = Math.abs(tA - uA);
+                // 🌟 修正：10度以内のズレは「完璧」とみなし、減点対象から外す（ノイズ対策）
+                let penalizedDiff = Math.max(0, angleDiff - 10);
+                diffSum += penalizedDiff;
+            });
+            // 🌟 修正：減点倍率を2.2から1.2に緩和
+            let tempScore = Math.max(0, 100 - (diffSum / joints.length * 1.2));
+            if (tempScore > bestScore) bestScore = tempScore;
         });
-        rawScore = Math.max(0, 100 - (diffSum / joints.length * 2.2));
+
+        rawScore = bestScore;
         scoreHistory.push(rawScore);
     }
 
