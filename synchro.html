@@ -44,7 +44,6 @@
     
             -webkit-mask-composite: source-in;
             mask-composite: intersect;
-            /* 🌟右の線を消すために右側を15%に修正 */
             clip-path: inset(5% 15% 0 5%);
         }
 
@@ -69,7 +68,6 @@
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
-            /* 🌟右の線を消すために右側を15%に修正 */
             clip-path: inset(5% 15% 0 5%);
         }
 
@@ -95,8 +93,15 @@
         .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
         
         #clear_screen { display: none; background: rgba(0, 255, 0, 0.2); backdrop-filter: blur(5px); z-index: 200; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
-        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 30px #0f0, 4px 4px 0 #000; animation: flash 0.5s infinite alternate; margin-bottom: 20px;}
+        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 30px #0f0, 4px 4px 0 #000; animation: flash 0.5s infinite alternate; margin-bottom: 20px; text-align: center;}
         @keyframes flash { from { opacity: 0.7; transform: scale(1); } to { opacity: 1; transform: scale(1.1); } }
+        
+        /* 🌟 写真撮影時のフラッシュ演出 */
+        #flash_overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; z-index: 300; display: none; opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +120,8 @@
 <div id="clear_screen" class="overlay">
     <div id="clear_text">PERFECT!</div>
 </div>
+
+<div id="flash_overlay"></div>
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
@@ -139,6 +146,7 @@ let rawTargetPoses = [];
 let isExtractingTarget = true;
 let isCleared = false;
 let isFinalPhase = false; 
+let isExamPhase = false; // 🌟 最終試験フェーズのフラグ
 
 const targetImageIds = ['img_pose_0', 'img_pose_1']; 
 const poseNames = ['DOWNの形', 'UPの形']; 
@@ -151,6 +159,7 @@ const HOLD_DURATION_MS = 2000;
 
 const TEACHER_POINT_RADIUS = 8; 
 
+// 評価に使う関節のインデックス
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12], [11, 12],
@@ -158,6 +167,21 @@ const CUSTOM_CONNECTIONS = [
   [11, 23], [12, 24], [23, 24],
   [23, 25], [25, 27], [24, 26], [26, 28]
 ];
+
+// 🌟 角度計算用の関節の組み合わせ (A, B, C) -> Bの角度を計算
+// [肩, 肘, 手首], [腰, 膝, 足首], [肩, 腰, 膝] などの左右
+const ANGLE_EVAL_GROUPS = [
+    [11, 13, 15], // 左腕（肘の角度）
+    [12, 14, 16], // 右腕
+    [23, 25, 27], // 左脚（膝の角度）
+    [24, 26, 28], // 右脚
+    [11, 23, 25], // 左胴体（腰の角度）
+    [12, 24, 26]  // 右胴体
+];
+
+let examScores = { down: 0, up: 0 };
+let currentExamPoseIndex = 0; // 0: DOWN, 1: UP
+let latestUserLandmarks = null; // 常に最新のユーザーの骨格を保持
 
 let audioCtx;
 function playSound(type) {
@@ -175,10 +199,19 @@ function playSound(type) {
         osc.type = 'triangle'; osc.frequency.setValueAtTime(440, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.2);
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
         osc.start(); osc.stop(audioCtx.currentTime + 0.5);
-    } else if (type === 'allclear') {
+    } else if (type === 'allclear' || type === 'exam_start') {
         osc.type = 'square'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6);
         osc.start(); osc.stop(audioCtx.currentTime + 0.6);
+    } else if (type === 'count') {
+        osc.type = 'square'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'shutter') {
+        // カシャッ！という音のつもり
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
     }
 }
 
@@ -257,23 +290,38 @@ function onResults(results) {
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-    if (isFinalPhase) {
+    // 常に最新のユーザーポーズを保持（試験時の写真判定で使うため）
+    if (results.poseLandmarks) {
+        let userPose = [...results.poseLandmarks];
+        const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
+        latestUserLandmarks = userPose.map((lm, i) => {
+            let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
+            return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
+        });
+    }
+
+    // 試験フェーズ中は、画面に点や線を描画しない（もしくは骨格だけ描画）
+    if (isFinalPhase || isExamPhase) {
+        if (isExamPhase && latestUserLandmarks) {
+             // 試験中、自分の今の骨格だけ白線で薄く出すかはお好みですが、一旦出しておきます。
+            CUSTOM_CONNECTIONS.forEach(([i, j]) => {
+                if (latestUserLandmarks[i] && latestUserLandmarks[j]) {
+                    canvasCtx.beginPath(); canvasCtx.moveTo(latestUserLandmarks[i].x * canvas.width, latestUserLandmarks[i].y * canvas.height);
+                    canvasCtx.lineTo(latestUserLandmarks[j].x * canvas.width, latestUserLandmarks[j].y * canvas.height);
+                    canvasCtx.strokeStyle = 'rgba(255,255,255,0.3)'; canvasCtx.lineWidth = 2; canvasCtx.stroke();
+                }
+            });
+        }
         canvasCtx.restore();
         return;
     }
 
+    // --- 以下、通常の練習フェーズ（リアルタイム判定） ---
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
-    if (results.poseLandmarks && targetNormalized) {
-        let userPose = [...results.poseLandmarks];
-        const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
-        let mirroredUserPose = userPose.map((lm, i) => {
-            let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
-            return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
-        });
-
-        let userNorm = getNormalizedJoints(mirroredUserPose);
+    if (results.poseLandmarks && targetNormalized && latestUserLandmarks) {
+        let userNorm = getNormalizedJoints(latestUserLandmarks);
         if (!userNorm) { canvasCtx.restore(); return; }
 
         let allPerfect = true;
@@ -292,14 +340,14 @@ function onResults(results) {
 
         CUSTOM_CONNECTIONS.forEach(([i, j]) => {
             if (results.poseLandmarks[i] && results.poseLandmarks[j]) {
-                canvasCtx.beginPath(); canvasCtx.moveTo(results.poseLandmarks[i].x * canvas.width, results.poseLandmarks[i].y * canvas.height);
-                canvasCtx.lineTo(results.poseLandmarks[j].x * canvas.width, results.poseLandmarks[j].y * canvas.height);
+                canvasCtx.beginPath(); canvasCtx.moveTo(latestUserLandmarks[i].x * canvas.width, latestUserLandmarks[i].y * canvas.height);
+                canvasCtx.lineTo(latestUserLandmarks[j].x * canvas.width, latestUserLandmarks[j].y * canvas.height);
                 canvasCtx.strokeStyle = 'rgba(255,255,255,0.5)'; canvasCtx.lineWidth = 4; canvasCtx.stroke();
             }
         });
 
         EVAL_INDICES.forEach(i => {
-            let lm = results.poseLandmarks[i];
+            let lm = latestUserLandmarks[i];
             if (lm) {
                 canvasCtx.beginPath(); 
                 canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 16, 0, 2 * Math.PI);
@@ -330,6 +378,7 @@ function onResults(results) {
                     document.getElementById('clear_text').innerText = "ALL CLEAR!!";
                     document.getElementById('clear_text').style.color = "#ff0";
                     document.getElementById('clear_text').style.textShadow = "0 0 30px #ff0, 4px 4px 0 #000";
+                    // 練習フェーズ終了 -> 最終シャドーイングフェーズへ
                     setTimeout(startFinalPhase, 3000);
                 } else {
                     document.getElementById('clear_text').innerText = "PERFECT!";
@@ -346,14 +395,24 @@ function onResults(results) {
     canvasCtx.restore();
 }
 
+// 🌟 長さの正規化（体のサイズの違いを吸収）
 function getNormalizedJoints(poseData) {
     if (!poseData || !poseData[11] || !poseData[12] || !poseData[23] || !poseData[24]) return null;
     let midX = (poseData[11].x + poseData[12].x) / 2; let midY = (poseData[11].y + poseData[12].y) / 2;
     let hipX = (poseData[23].x + poseData[24].x) / 2; let hipY = (poseData[23].y + poseData[24].y) / 2;
-    let length = Math.hypot(midX - hipX, midY - hipY) || 0.1;
+    // 胴体の長さを基準にする
+    let length = Math.hypot(midX - hipX, midY - hipY) || 0.1; 
     let normPose = {};
     EVAL_INDICES.forEach(i => { if (poseData[i]) { normPose[i] = { x: (poseData[i].x - midX) / length, y: (poseData[i].y - midY) / length }; } });
     return normPose;
+}
+
+// 🌟 角度の計算（A, B, C の3点が作るBの角度を 0〜180度で返す）
+function calculateAngle(a, b, c) {
+    let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let angle = Math.abs(radians * 180.0 / Math.PI);
+    if (angle > 180.0) angle = 360 - angle;
+    return angle;
 }
 
 let tempCanvas = document.createElement('canvas');
@@ -363,7 +422,8 @@ function processTeacherCanvas() {
     requestAnimationFrame(processTeacherCanvas);
     if (isExtractingTarget) return;
 
-    if (!isFinalPhase) {
+    if (!isFinalPhase && !isExamPhase) {
+        // 通常練習フェーズ（先生のホログラムと骨格を表示）
         let targetId = sequence[sequenceIndex];
         let sourceElement = document.getElementById(targetImageIds[targetId]);
         let poseData = rawTargetPoses[targetId];
@@ -417,7 +477,7 @@ function processTeacherCanvas() {
                 tCtx.restore();
             }
         }
-    } else {
+    } else if (isFinalPhase) {
         // 🌟 映像が非表示（display:none）になったら、重い処理を完全にストップさせる
         if (fCanvas.style.display === 'none') return;
 
@@ -464,7 +524,7 @@ function startCamera() {
     camera.start();
 
     let finalVideo = document.getElementById('final_video');
-    finalVideo.muted = true; // スタート時は音を出さない
+    finalVideo.muted = true; 
     finalVideo.play().then(() => {
         finalVideo.pause();
         finalVideo.currentTime = 0;
@@ -481,6 +541,9 @@ function nextPose() {
     document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
 }
 
+// -----------------------------------------------------
+// 🌟 最終シャドーイングフェーズ
+// -----------------------------------------------------
 function startFinalPhase() {
     isFinalPhase = true;
     isCleared = false;
@@ -500,21 +563,170 @@ function startFinalPhase() {
     finalVideo.muted = false;
     finalVideo.currentTime = 0;
     
-    // 🌟 【ココを変更してください】映像を消すタイミング（秒）
-    const ONE_EIGHT_SECONDS = 4.0; // 例: 4秒後に消える
+    const ONE_EIGHT_SECONDS = 4.0; // 🌟 映像を消すタイミング
     
     finalVideo.ontimeupdate = function() {
         if (finalVideo.currentTime >= ONE_EIGHT_SECONDS) {
-            fCanvas.style.display = 'none'; // 映像を消す
-            msg.innerText = ""; // ついでに文字も消したい場合はこれを残す
+            fCanvas.style.display = 'none'; 
+            msg.innerText = ""; 
         }
     };
     
     finalVideo.onended = function() {
-        location.reload(); 
+        finalVideo.ontimeupdate = null;
+        // シャドーイング終了 -> 最終試験へ
+        startExamPhase();
     };
 
     finalVideo.play().catch(e => console.log(e));
+}
+
+// -----------------------------------------------------
+// 🌟 最終試験フェーズ
+// -----------------------------------------------------
+function startExamPhase() {
+    isFinalPhase = false;
+    isExamPhase = true;
+    
+    // ホログラムキャンバスは非表示のまま
+    tCanvas.style.display = 'none';
+    fCanvas.style.display = 'none';
+    
+    document.getElementById('clear_screen').style.display = 'flex';
+    document.getElementById('clear_text').innerText = "FINAL EXAM\n最終試験";
+    document.getElementById('clear_text').style.color = "#ff0";
+    playSound('exam_start');
+    
+    setTimeout(() => {
+        document.getElementById('clear_screen').style.display = 'none';
+        currentExamPoseIndex = 0; // DOWNから
+        executeExamPose();
+    }, 2500);
+}
+
+function executeExamPose() {
+    const msg = document.getElementById('message_text');
+    msg.style.color = "#fff";
+    msg.innerText = `${poseNames[currentExamPoseIndex]}\nの形で止まれ！`;
+    
+    // カウントダウン開始
+    let count = 3;
+    let countInterval = setInterval(() => {
+        msg.innerText = `${poseNames[currentExamPoseIndex]}\nの形で止まれ！\n${count}`;
+        if(count > 0) playSound('count');
+        
+        if (count === 0) {
+            clearInterval(countInterval);
+            takeSnapshotAndScore();
+        }
+        count--;
+    }, 1000);
+}
+
+// 写真判定とスコア計算
+function takeSnapshotAndScore() {
+    playSound('shutter');
+    
+    // フラッシュ演出
+    const flash = document.getElementById('flash_overlay');
+    flash.style.display = 'block';
+    flash.style.opacity = '1';
+    setTimeout(() => {
+        flash.style.transition = 'opacity 0.5s ease-out';
+        flash.style.opacity = '0';
+        setTimeout(() => { flash.style.display = 'none'; flash.style.transition = ''; }, 500);
+    }, 50);
+
+    const msg = document.getElementById('message_text');
+    msg.innerText = "判定中...";
+
+    // 🌟 AI判定（0.1秒待ってから確実に現在の座標で計算する）
+    setTimeout(() => {
+        let score = calculateExamScore(currentExamPoseIndex);
+        
+        if (currentExamPoseIndex === 0) {
+            examScores.down = score;
+        } else {
+            examScores.up = score;
+        }
+        
+        msg.innerText = `${poseNames[currentExamPoseIndex]}\n${score} 点！`;
+        msg.style.color = score > 80 ? "#0f0" : "#ff0";
+        playSound(score > 80 ? 'clear' : 'tick');
+
+        setTimeout(() => {
+            if (currentExamPoseIndex === 0) {
+                // DOWNが終わったらUPへ
+                currentExamPoseIndex = 1;
+                executeExamPose();
+            } else {
+                // UPも終わったら結果発表へ
+                showFinalResult();
+            }
+        }, 2000);
+        
+    }, 100);
+}
+
+// 🌟 最強の絶対評価：比率＋角度でスコアを出す
+function calculateExamScore(poseIndex) {
+    if (!latestUserLandmarks) return 0;
+    
+    let targetLandmarks = rawTargetPoses[poseIndex]; // 先生の生データ
+    let userNorm = getNormalizedJoints(latestUserLandmarks);
+    let targetNorm = getNormalizedJoints(targetLandmarks);
+    
+    if (!userNorm || !targetNorm) return 0;
+
+    let totalScore = 100;
+    let penalty = 0;
+
+    // 1. 関節の相対距離（比率）によるペナルティ
+    EVAL_INDICES.forEach(i => {
+        if (!targetNorm[i] || !userNorm[i]) return;
+        let dist = Math.hypot(targetNorm[i].x - userNorm[i].x, targetNorm[i].y - userNorm[i].y);
+        // ズレが大きいほど減点（シビアに調整）
+        penalty += (dist * 15); 
+    });
+
+    // 2. 関節の角度によるペナルティ（体格差を完全に無視できる神判定）
+    ANGLE_EVAL_GROUPS.forEach(group => {
+        let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
+        let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
+        
+        if(aT && bT && cT && aU && bU && cU) {
+            let angleT = calculateAngle(aT, bT, cT);
+            let angleU = calculateAngle(aU, bU, cU);
+            let angleDiff = Math.abs(angleT - angleU);
+            
+            // 角度が10度ズレるごとに数点減点
+            penalty += (angleDiff * 0.3); 
+        }
+    });
+
+    let finalScore = Math.max(0, Math.round(totalScore - penalty));
+    return finalScore;
+}
+
+function showFinalResult() {
+    const msg = document.getElementById('message_text');
+    msg.innerText = "";
+    
+    let total = examScores.down + examScores.up;
+    let rank = "C";
+    if (total >= 190) rank = "S";
+    else if (total >= 160) rank = "A";
+    else if (total >= 120) rank = "B";
+
+    document.getElementById('clear_screen').style.display = 'flex';
+    document.getElementById('clear_text').innerHTML = `TOTAL SCORE<br><span style="font-size:120px; color:#fff;">${total}</span> / 200 点<br>RANK: <span style="font-size:100px; color:#f0f;">${rank}</span>`;
+    
+    playSound('allclear');
+    
+    // 5秒後にリロード
+    setTimeout(() => {
+        location.reload();
+    }, 7000);
 }
 </script>
 </body>
