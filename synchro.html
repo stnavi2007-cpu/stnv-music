@@ -83,8 +83,8 @@
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
         #message_text { 
-            position: absolute; top: 19%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
+            position: absolute; top: 11%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 25px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
         }
         
@@ -146,7 +146,7 @@ let rawTargetPoses = [];
 let isExtractingTarget = true;
 let isCleared = false;
 let isFinalPhase = false; 
-let isExamPhase = false; // 🌟 最終試験フェーズのフラグ
+let isExamPhase = false; 
 
 const targetImageIds = ['img_pose_0', 'img_pose_1']; 
 const poseNames = ['DOWNの形', 'UPの形']; 
@@ -159,7 +159,6 @@ const HOLD_DURATION_MS = 2000;
 
 const TEACHER_POINT_RADIUS = 8; 
 
-// 評価に使う関節のインデックス
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 const CUSTOM_CONNECTIONS = [
   [0, 11], [0, 12], [11, 12],
@@ -168,8 +167,6 @@ const CUSTOM_CONNECTIONS = [
   [23, 25], [25, 27], [24, 26], [26, 28]
 ];
 
-// 🌟 角度計算用の関節の組み合わせ (A, B, C) -> Bの角度を計算
-// [肩, 肘, 手首], [腰, 膝, 足首], [肩, 腰, 膝] などの左右
 const ANGLE_EVAL_GROUPS = [
     [11, 13, 15], // 左腕（肘の角度）
     [12, 14, 16], // 右腕
@@ -180,8 +177,8 @@ const ANGLE_EVAL_GROUPS = [
 ];
 
 let examScores = { down: 0, up: 0 };
-let currentExamPoseIndex = 0; // 0: DOWN, 1: UP
-let latestUserLandmarks = null; // 常に最新のユーザーの骨格を保持
+let currentExamPoseIndex = 0; 
+let latestUserLandmarks = null; 
 
 let audioCtx;
 function playSound(type) {
@@ -208,7 +205,6 @@ function playSound(type) {
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         osc.start(); osc.stop(audioCtx.currentTime + 0.1);
     } else if (type === 'shutter') {
-        // カシャッ！という音のつもり
         osc.type = 'sawtooth'; osc.frequency.setValueAtTime(1200, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
         osc.start(); osc.stop(audioCtx.currentTime + 0.15);
@@ -290,7 +286,6 @@ function onResults(results) {
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-    // 常に最新のユーザーポーズを保持（試験時の写真判定で使うため）
     if (results.poseLandmarks) {
         let userPose = [...results.poseLandmarks];
         const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
@@ -300,10 +295,8 @@ function onResults(results) {
         });
     }
 
-    // 試験フェーズ中は、画面に点や線を描画しない（もしくは骨格だけ描画）
     if (isFinalPhase || isExamPhase) {
         if (isExamPhase && latestUserLandmarks) {
-             // 試験中、自分の今の骨格だけ白線で薄く出すかはお好みですが、一旦出しておきます。
             CUSTOM_CONNECTIONS.forEach(([i, j]) => {
                 if (latestUserLandmarks[i] && latestUserLandmarks[j]) {
                     canvasCtx.beginPath(); canvasCtx.moveTo(latestUserLandmarks[i].x * canvas.width, latestUserLandmarks[i].y * canvas.height);
@@ -316,7 +309,6 @@ function onResults(results) {
         return;
     }
 
-    // --- 以下、通常の練習フェーズ（リアルタイム判定） ---
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
@@ -378,7 +370,6 @@ function onResults(results) {
                     document.getElementById('clear_text').innerText = "ALL CLEAR!!";
                     document.getElementById('clear_text').style.color = "#ff0";
                     document.getElementById('clear_text').style.textShadow = "0 0 30px #ff0, 4px 4px 0 #000";
-                    // 練習フェーズ終了 -> 最終シャドーイングフェーズへ
                     setTimeout(startFinalPhase, 3000);
                 } else {
                     document.getElementById('clear_text').innerText = "PERFECT!";
@@ -395,19 +386,16 @@ function onResults(results) {
     canvasCtx.restore();
 }
 
-// 🌟 長さの正規化（体のサイズの違いを吸収）
 function getNormalizedJoints(poseData) {
     if (!poseData || !poseData[11] || !poseData[12] || !poseData[23] || !poseData[24]) return null;
     let midX = (poseData[11].x + poseData[12].x) / 2; let midY = (poseData[11].y + poseData[12].y) / 2;
     let hipX = (poseData[23].x + poseData[24].x) / 2; let hipY = (poseData[23].y + poseData[24].y) / 2;
-    // 胴体の長さを基準にする
     let length = Math.hypot(midX - hipX, midY - hipY) || 0.1; 
     let normPose = {};
     EVAL_INDICES.forEach(i => { if (poseData[i]) { normPose[i] = { x: (poseData[i].x - midX) / length, y: (poseData[i].y - midY) / length }; } });
     return normPose;
 }
 
-// 🌟 角度の計算（A, B, C の3点が作るBの角度を 0〜180度で返す）
 function calculateAngle(a, b, c) {
     let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
     let angle = Math.abs(radians * 180.0 / Math.PI);
@@ -423,7 +411,6 @@ function processTeacherCanvas() {
     if (isExtractingTarget) return;
 
     if (!isFinalPhase && !isExamPhase) {
-        // 通常練習フェーズ（先生のホログラムと骨格を表示）
         let targetId = sequence[sequenceIndex];
         let sourceElement = document.getElementById(targetImageIds[targetId]);
         let poseData = rawTargetPoses[targetId];
@@ -478,7 +465,6 @@ function processTeacherCanvas() {
             }
         }
     } else if (isFinalPhase) {
-        // 🌟 映像が非表示（display:none）になったら、重い処理を完全にストップさせる
         if (fCanvas.style.display === 'none') return;
 
         let fVideo = document.getElementById('final_video');
@@ -541,9 +527,6 @@ function nextPose() {
     document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
 }
 
-// -----------------------------------------------------
-// 🌟 最終シャドーイングフェーズ
-// -----------------------------------------------------
 function startFinalPhase() {
     isFinalPhase = true;
     isCleared = false;
@@ -563,7 +546,7 @@ function startFinalPhase() {
     finalVideo.muted = false;
     finalVideo.currentTime = 0;
     
-    const ONE_EIGHT_SECONDS = 4.0; // 🌟 映像を消すタイミング
+    const ONE_EIGHT_SECONDS = 4.0; 
     
     finalVideo.ontimeupdate = function() {
         if (finalVideo.currentTime >= ONE_EIGHT_SECONDS) {
@@ -574,21 +557,16 @@ function startFinalPhase() {
     
     finalVideo.onended = function() {
         finalVideo.ontimeupdate = null;
-        // シャドーイング終了 -> 最終試験へ
         startExamPhase();
     };
 
     finalVideo.play().catch(e => console.log(e));
 }
 
-// -----------------------------------------------------
-// 🌟 最終試験フェーズ
-// -----------------------------------------------------
 function startExamPhase() {
     isFinalPhase = false;
     isExamPhase = true;
     
-    // ホログラムキャンバスは非表示のまま
     tCanvas.style.display = 'none';
     fCanvas.style.display = 'none';
     
@@ -599,7 +577,7 @@ function startExamPhase() {
     
     setTimeout(() => {
         document.getElementById('clear_screen').style.display = 'none';
-        currentExamPoseIndex = 0; // DOWNから
+        currentExamPoseIndex = 0; 
         executeExamPose();
     }, 2500);
 }
@@ -609,7 +587,6 @@ function executeExamPose() {
     msg.style.color = "#fff";
     msg.innerText = `${poseNames[currentExamPoseIndex]}\nの形で止まれ！`;
     
-    // カウントダウン開始
     let count = 3;
     let countInterval = setInterval(() => {
         msg.innerText = `${poseNames[currentExamPoseIndex]}\nの形で止まれ！\n${count}`;
@@ -623,11 +600,9 @@ function executeExamPose() {
     }, 1000);
 }
 
-// 写真判定とスコア計算
 function takeSnapshotAndScore() {
     playSound('shutter');
     
-    // フラッシュ演出
     const flash = document.getElementById('flash_overlay');
     flash.style.display = 'block';
     flash.style.opacity = '1';
@@ -640,7 +615,6 @@ function takeSnapshotAndScore() {
     const msg = document.getElementById('message_text');
     msg.innerText = "判定中...";
 
-    // 🌟 AI判定（0.1秒待ってから確実に現在の座標で計算する）
     setTimeout(() => {
         let score = calculateExamScore(currentExamPoseIndex);
         
@@ -656,11 +630,9 @@ function takeSnapshotAndScore() {
 
         setTimeout(() => {
             if (currentExamPoseIndex === 0) {
-                // DOWNが終わったらUPへ
                 currentExamPoseIndex = 1;
                 executeExamPose();
             } else {
-                // UPも終わったら結果発表へ
                 showFinalResult();
             }
         }, 2000);
@@ -668,11 +640,11 @@ function takeSnapshotAndScore() {
     }, 100);
 }
 
-// 🌟 最強の絶対評価：比率＋角度でスコアを出す
+// 🌟 【神バランス調整版】最強の絶対評価：階段式ペナルティ
 function calculateExamScore(poseIndex) {
     if (!latestUserLandmarks) return 0;
     
-    let targetLandmarks = rawTargetPoses[poseIndex]; // 先生の生データ
+    let targetLandmarks = rawTargetPoses[poseIndex]; 
     let userNorm = getNormalizedJoints(latestUserLandmarks);
     let targetNorm = getNormalizedJoints(targetLandmarks);
     
@@ -681,15 +653,22 @@ function calculateExamScore(poseIndex) {
     let totalScore = 100;
     let penalty = 0;
 
-    // 1. 関節の相対距離（比率）によるペナルティ
+    // 1. 関節の相対距離（比率）による階段式ペナルティ
     EVAL_INDICES.forEach(i => {
         if (!targetNorm[i] || !userNorm[i]) return;
         let dist = Math.hypot(targetNorm[i].x - userNorm[i].x, targetNorm[i].y - userNorm[i].y);
-        // ズレが大きいほど減点（シビアに調整）
-        penalty += (dist * 15); 
+        
+        if (dist > 0.25) {
+            penalty += 10; // 致命的なズレ（手足が全然違う場所にある等）
+        } else if (dist > 0.15) {
+            penalty += 4;  // 結構ズレている
+        } else if (dist > 0.08) {
+            penalty += 1;  // おしい！（ほんの少しズレている）
+        }
+        // 0.08以下のズレは「誤差（セーフ）」として減点なし！
     });
 
-    // 2. 関節の角度によるペナルティ（体格差を完全に無視できる神判定）
+    // 2. 関節の角度による階段式ペナルティ
     ANGLE_EVAL_GROUPS.forEach(group => {
         let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
         let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
@@ -699,8 +678,14 @@ function calculateExamScore(poseIndex) {
             let angleU = calculateAngle(aU, bU, cU);
             let angleDiff = Math.abs(angleT - angleU);
             
-            // 角度が10度ズレるごとに数点減点
-            penalty += (angleDiff * 0.3); 
+            if (angleDiff > 45) {
+                penalty += 20; // まったく違う（曲げるべき関節が伸びている、棒立ち等）一発アウト級
+            } else if (angleDiff > 25) {
+                penalty += 8;  // 曲がり具合が全然足りていない
+            } else if (angleDiff > 12) {
+                penalty += 2;  // あとちょっと！
+            }
+            // 12度以内のズレは「誤差（人間だもの）」として減点なし！
         }
     });
 
@@ -723,7 +708,6 @@ function showFinalResult() {
     
     playSound('allclear');
     
-    // 5秒後にリロード
     setTimeout(() => {
         location.reload();
     }, 7000);
