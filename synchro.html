@@ -367,14 +367,12 @@ function processChromaKey() {
             
             tCtx.clearRect(0, 0, tCanvas.width, tCanvas.height);
             
-            // ▼▼▼ ゴースト表示の切り替え（生徒のターン中は薄く表示） ▼▼▼
             if (isStudentTurn) {
                 tCanvas.style.opacity = "0.2";
             } else {
                 tCanvas.style.opacity = "0.75";
             }
             
-            // 常に先生を描画する
             tCtx.drawImage(tVideo, hologramOffsetX, hologramOffsetY, tCanvas.width, tCanvas.height);
             let frame = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height);
             
@@ -432,7 +430,6 @@ function onUserResults(results) {
     updateScore();
 }
 
-// ▼▼ ミラー対応の座標正規化 ▼▼
 function getNormalizedJoints(pose, isMirrored = false) {
     if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
     
@@ -486,7 +483,7 @@ function updateScore() {
 
     if (teacherHistory.length > 0 && currentUserLandmarks && currentUserLandmarks.length > 0 && userMotionWindow.length > 5) {
         
-        let uNorm = getNormalizedJoints(currentUserLandmarks, true); // 生徒はミラー反転
+        let uNorm = getNormalizedJoints(currentUserLandmarks, true); 
         if (!uNorm) return;
 
         let bestScore = 0;
@@ -494,9 +491,8 @@ function updateScore() {
         const LEG_INDICES = [23, 24, 25, 26, 27, 28];
         const BODY_INDICES = [0, 11, 12, 23, 24];
 
-        // ラグを吸収するための総当たり戦
         teacherHistory.forEach(pastTeacher => {
-            let tNorm = getNormalizedJoints(pastTeacher, false); // 先生はそのまま
+            let tNorm = getNormalizedJoints(pastTeacher, false); 
             if (!tNorm) return;
 
             let maxMovement = 0;
@@ -510,8 +506,8 @@ function updateScore() {
                 }
             });
 
-            // 【変更箇所】最大動作量の25%未満を採点対象から除外（アイソレーション強化）
-            let activeThreshold = Math.max(0.015, maxMovement * 0.25);
+            // ノイズや微細な動きをカットする閾値（意図的に止めている部位を除外）
+            let activeThreshold = Math.max(0.015, maxMovement * 0.15);
             let groupTotalWeight = 0;
             let weightedScoreSum = 0;
 
@@ -522,51 +518,62 @@ function updateScore() {
                 indices.forEach(i => {
                     if (!tNorm[i] || !uNorm[i]) return;
 
-                    let uPast = getNormalizedJoints(userMotionWindow[0], true);
-                    let uMag = 0;
-                    if(uPast && uPast[i]){
-                        uMag = Math.hypot(uNorm[i].x - uPast[i].x, uNorm[i].y - uPast[i].y);
-                    }
+                    let prevTObj = teacherMotionWindow[0];
+                    let prevTNorm = prevTObj ? getNormalizedJoints(prevTObj, false) : null;
+                    let uPastObj = userMotionWindow[0];
+                    let uPast = uPastObj ? getNormalizedJoints(uPastObj, true) : null;
 
-                    let prevT = teacherMotionWindow[0];
-                    let tMag = 0;
-                    if(prevT && prevT[i]) {
-                        tMag = Math.hypot(pastTeacher[i].x - prevT[i].x, pastTeacher[i].y - prevT[i].y);
-                    }
+                    if (!prevTNorm || !prevTNorm[i] || !uPast || !uPast[i]) return;
 
-                    let weight = tMag >= activeThreshold ? tMag : 0;
+                    // 過去フレームから現在までの「移動ベクトル」を抽出
+                    let tx = tNorm[i].x - prevTNorm[i].x;
+                    let ty = tNorm[i].y - prevTNorm[i].y;
+                    let ux = uNorm[i].x - uPast[i].x;
+                    let uy = uNorm[i].y - uPast[i].y;
+
+                    // 速度（移動量）
+                    let tLen = Math.hypot(tx, ty);
+                    let uLen = Math.hypot(ux, uy);
+
+                    // 先生の移動量が閾値以上の場合のみスコア加算の対象（重み）とする。動いていない部位はここで除外(return)される。
+                    let weight = tLen >= activeThreshold ? tLen : 0;
                     if (weight === 0) return; 
 
-                    let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                    let posScore = Math.max(0, 1.0 - (posDiff / 0.3));
+                    let jointScore = 0;
 
-                    // 【変更箇所】ズル防止機能の強化（棒立ちキラー＆デタラメ暴れキラー）
-                    if (uMag <= 0.015) {
-                        // 棒立ちキラー：移動量がノイズレベル(0.015以下)なら強制0点
-                        posScore = 0;
+                    // 1. 座標一致度（カメラ距離・体格差を吸収するため閾値を0.5に緩和）
+                    let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
+                    let posScore = Math.max(0, 1.0 - (posDiff / 0.5));
+
+                    // 2. ベクトル一致度（スピードと方向）
+                    if (uLen <= 0.01) {
+                        // 棒立ちキラー：先生が動いているのに生徒は動いていない
+                        jointScore = 0;
                     } else {
-                        // デタラメ暴れキラー：方向が全く違う場合は0点
-                        let prevTNorm = prevT ? getNormalizedJoints(prevT, false) : null;
-                        if (prevTNorm && prevTNorm[i] && uPast && uPast[i]) {
-                            let tx = tNorm[i].x - prevTNorm[i].x;
-                            let ty = tNorm[i].y - prevTNorm[i].y;
-                            let ux = uNorm[i].x - uPast[i].x;
-                            let uy = uNorm[i].y - uPast[i].y;
+                        // 内積による方向の類似度計算
+                        let dot = (tx * ux) + (ty * uy);
+                        let cosTheta = Math.max(-1, Math.min(1, dot / (tLen * uLen)));
+
+                        if (cosTheta < 0) {
+                            // デタラメ暴れキラー：進行方向が90度以上ズレている（逆方向など）
+                            jointScore = 0;
+                        } else {
+                            // 方向の完全性 (0.0〜1.0)
+                            let angleScore = cosTheta;
                             
-                            let tLen = Math.hypot(tx, ty);
-                            let uLen = Math.hypot(ux, uy);
-                            
-                            if (tLen > 0.02 && uLen > 0.02) {
-                                let dot = (tx * ux) + (ty * uy);
-                                let cosTheta = dot / (tLen * uLen);
-                                if (cosTheta < 0) { // 進行方向が90度以上異なる（逆方向など）
-                                    posScore = 0;
-                                }
-                            }
+                            // スピード（移動量）の完全性 (0.0〜1.0)
+                            let speedScore = Math.min(tLen, uLen) / Math.max(tLen, uLen);
+
+                            // 動きの再現度合い（方向60% ＋ 速度40%）
+                            let motionScore = (angleScore * 0.6) + (speedScore * 0.4);
+
+                            // 総合判定：位置の一致は30%に留め、動きの再現度を70%として評価する
+                            // これにより完璧な動きのトレースで90点以上が獲得可能になる
+                            let finalScore = (motionScore * 0.7) + (posScore * 0.3);
+                            jointScore = 100 * finalScore;
                         }
                     }
 
-                    let jointScore = 100 * posScore;
                     gSum += jointScore * weight;
                     gWeight += weight;
 
