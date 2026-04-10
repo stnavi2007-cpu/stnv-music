@@ -62,8 +62,8 @@
             z-index: 3; 
             pointer-events: none; 
             display: none;
-            opacity: 0.50; 
-            transform: scale(0.95);
+            opacity: 0.80; 
+            transform: scale(1.2);
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
@@ -178,8 +178,7 @@ const ANGLE_EVAL_GROUPS = [
 
 let examScores = { down: 0, up: 0 };
 let currentExamPoseIndex = 0; 
-let latestUserLandmarks = null;         // 描画用（生の座標）
-let latestUserLandmarksMirrored = null; // 採点用（反転した座標）
+let latestUserLandmarks = null; 
 
 let audioCtx;
 function playSound(type) {
@@ -288,16 +287,8 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     if (results.poseLandmarks) {
-        // 描画用（そのままの座標）
+        // 🌟 呪いの反転処理（MIRROR_MAP）を完全に削除し、そのままの生座標だけを使用
         latestUserLandmarks = results.poseLandmarks;
-
-        // 採点用（鏡合わせに反転した座標）
-        let userPose = [...results.poseLandmarks];
-        const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
-        latestUserLandmarksMirrored = userPose.map((lm, i) => {
-            let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
-            return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
-        });
     }
 
     if (isFinalPhase || isExamPhase) {
@@ -317,8 +308,8 @@ function onResults(results) {
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
-    if (results.poseLandmarks && targetNormalized && latestUserLandmarksMirrored) {
-        let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
+    if (results.poseLandmarks && targetNormalized && latestUserLandmarks) {
+        let userNorm = getNormalizedJoints(latestUserLandmarks);
         if (!userNorm) { canvasCtx.restore(); return; }
 
         let allPerfect = true;
@@ -629,27 +620,33 @@ function takeSnapshotAndScore() {
             examScores.up = score;
         }
         
-        msg.innerText = `${poseNames[currentExamPoseIndex]}\n${score} 点！`;
-        msg.style.color = score > 80 ? "#0f0" : "#ff0";
-        playSound(score > 80 ? 'clear' : 'tick');
+        // 🌟 判定中テキストを消して、ど真ん中（clear_screen）に点数をドーンと出す！
+        msg.innerText = "";
+        
+        document.getElementById('clear_screen').style.display = 'flex';
+        document.getElementById('clear_text').innerHTML = `${poseNames[currentExamPoseIndex]}<br><span style="font-size:120px; color:#fff;">${score}</span> 点！`;
+        document.getElementById('clear_text').style.color = score >= 80 ? "#0f0" : "#ff0";
+        
+        playSound(score >= 80 ? 'clear' : 'tick');
 
         setTimeout(() => {
+            document.getElementById('clear_screen').style.display = 'none';
             if (currentExamPoseIndex === 0) {
                 currentExamPoseIndex = 1;
                 executeExamPose();
             } else {
                 showFinalResult();
             }
-        }, 2000);
+        }, 3000);
         
     }, 100);
 }
 
 function calculateExamScore(poseIndex) {
-    if (!latestUserLandmarksMirrored) return 0;
+    if (!latestUserLandmarks) return 0;
     
     let targetLandmarks = rawTargetPoses[poseIndex]; 
-    let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
+    let userNorm = getNormalizedJoints(latestUserLandmarks);
     let targetNorm = getNormalizedJoints(targetLandmarks);
     
     if (!userNorm || !targetNorm) return 0;
@@ -672,7 +669,7 @@ function calculateExamScore(poseIndex) {
 
     ANGLE_EVAL_GROUPS.forEach(group => {
         let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
-        let aU = latestUserLandmarksMirrored[group[0]], bU = latestUserLandmarksMirrored[group[1]], cU = latestUserLandmarksMirrored[group[2]];
+        let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
         
         if(aT && bT && cT && aU && bU && cU) {
             let angleT = calculateAngle(aT, bT, cT);
