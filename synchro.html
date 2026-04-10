@@ -24,26 +24,28 @@
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
-        /* 🌟修正: clip-pathを使って画像の不要な黒枠（端）を切り落とす */
+        /* 🌟 ホログラムのレイアウトとグラデーションマスク */
         #teacher_canvas {
             position: absolute; 
-            top: 15vh;     
-            left: 5%;      
+            top: 15vh;     /* 少し下に配置 */
+            left: 5%;      /* 🌟 センターから少し右へ移動 */
             width: 100%; 
             height: 85vh; 
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.75; 
-            transform: scale(0.95); 
+            opacity: 0.75; /* ホログラム感 */
+            transform: scale(0.95); /* 🌟 サイズを少し落とす */
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            /* 🌟 足首を消すグラデーション */
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             /* 上、左、右の端2%を削り落として黒枠を消す */
             clip-path: inset(2% 2% 0 2%); 
         }
 
+        /* 最終フェーズの動画（ホログラムキャンバスと同じスタイル） */
         #final_video {
             position: absolute; 
             top: 15vh; 
@@ -63,9 +65,9 @@
             clip-path: inset(2% 2% 0 2%);
         }
 
+        /* 画像や音声は裏で処理するため非表示 */
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
-        /* 🌟修正: padding-topを調整し、要素が上から順番に並ぶようにする */
         .ui-layer { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
@@ -75,7 +77,7 @@
         #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; }
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
-        /* 🌟修正: 絶対配置(position: absolute)をやめ、メーターの下に自然に配置されるようにした */
+        /* 🌟 文字が顔に被らないように配置を調整 */
         #message_text { 
             font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
@@ -92,8 +94,8 @@
 </head>
 <body>
 
-<img id="img_pose_0" src="pose_down.png" crossorigin="anonymous" onerror="alert('pose_down.pngが見つかりません')">
-<img id="img_pose_1" src="pose_up.png" crossorigin="anonymous" onerror="alert('pose_up.pngが見つかりません')">
+<img id="img_pose_0" src="pose_up.png" crossorigin="anonymous" onerror="alert('pose_up.pngが見つかりません')">
+<img id="img_pose_1" src="pose_down.png" crossorigin="anonymous" onerror="alert('pose_down.pngが見つかりません')">
 
 <video id="final_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>
 <audio id="final_audio" src="sample_dance.mp4" preload="auto"></audio>
@@ -131,15 +133,14 @@ let isExtractingTarget = true;
 let isCleared = false;
 let isFinalPhase = false; 
 
-// 🌟修正: 配列の順番とテキストを入れ替え（UPの形からスタート）
-const targetImageIds = ['img_pose_1', 'img_pose_0']; 
-const poseNames = ['UPの形', 'DOWNの形']; 
+// 🌟修正: 順番をDOWNからスタートに戻す（画像の入れ替えは上のimgタグで行ったためこれで解決）
+const targetImageIds = ['img_pose_0', 'img_pose_1']; 
+const poseNames = ['DOWNの形', 'UPの形']; 
 const sequence = [0, 1, 0, 1, 0, 1, 0, 1]; 
 let sequenceIndex = 0;
 let extractIndex = 0;
 
 let holdStartTime = null;
-// 🌟修正: 静止時間を2秒に変更
 const HOLD_DURATION_MS = 2000; 
 
 const BPM = 100;
@@ -154,6 +155,7 @@ const CUSTOM_CONNECTIONS = [
   [23, 25], [25, 27], [24, 26], [26, 28]
 ];
 
+// 音声設定
 let audioCtx;
 function playSound(type) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -177,6 +179,7 @@ function playSound(type) {
     }
 }
 
+// 初期化（AIでポーズ抽出開始）
 function initApp() {
     document.getElementById('btn_extract').style.display = 'none';
     const msg = document.getElementById('loading_msg');
@@ -264,212 +267,4 @@ function onResults(results) {
         let userNorm = getNormalizedJoints(mirroredUserPose);
         if (!userNorm) { canvasCtx.restore(); return; }
 
-        let allPerfect = true;
-        let jointColors = {};
-
-        EVAL_INDICES.forEach(i => {
-            if (!targetNormalized[i] || !userNorm[i]) return;
-            let dist = Math.hypot(targetNormalized[i].x - userNorm[i].x, targetNormalized[i].y - userNorm[i].y);
-
-            let color = '#ff0000'; 
-            /* 🌟修正: 判定を少しだけ緩くしました (0.20 -> 0.25, 0.40 -> 0.45) */
-            if (dist < 0.25) { color = '#00ff00'; } 
-            else if (dist < 0.45) { color = '#ffff00'; allPerfect = false; } 
-            else { allPerfect = false; }
-            jointColors[i] = color;
-        });
-
-        CUSTOM_CONNECTIONS.forEach(([i, j]) => {
-            if (results.poseLandmarks[i] && results.poseLandmarks[j]) {
-                canvasCtx.beginPath(); canvasCtx.moveTo(results.poseLandmarks[i].x * canvas.width, results.poseLandmarks[i].y * canvas.height);
-                canvasCtx.lineTo(results.poseLandmarks[j].x * canvas.width, results.poseLandmarks[j].y * canvas.height);
-                canvasCtx.strokeStyle = 'rgba(255,255,255,0.5)'; canvasCtx.lineWidth = 4; canvasCtx.stroke();
-            }
-        });
-
-        EVAL_INDICES.forEach(i => {
-            let lm = results.poseLandmarks[i];
-            if (lm) {
-                canvasCtx.beginPath(); 
-                /* 🌟修正: 生徒の点の大きさを半分に (15 -> 8程度) */
-                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 8, 0, 2 * Math.PI);
-                canvasCtx.fillStyle = jointColors[i] || '#ffffff'; canvasCtx.fill();
-                canvasCtx.strokeStyle = '#000'; canvasCtx.lineWidth = 2; canvasCtx.stroke();
-            }
-        });
-
-        const gaugeFill = document.getElementById('gauge_fill');
-        const msgText = document.getElementById('message_text');
-
-        if (allPerfect) {
-            if (holdStartTime === null) { holdStartTime = performance.now(); playSound('tick'); }
-            let elapsed = performance.now() - holdStartTime;
-            let progress = Math.min(100, (elapsed / HOLD_DURATION_MS) * 100);
-            gaugeFill.style.width = progress + '%';
-            msgText.innerText = "KEEP!!"; msgText.style.color = "#0f0";
-
-            if (elapsed >= HOLD_DURATION_MS && !isCleared) {
-                isCleared = true;
-                playSound('clear');
-                document.getElementById('clear_screen').style.display = 'flex';
-                document.getElementById('gauge_container').style.display = 'none';
-                
-                sequenceIndex++;
-                if (sequenceIndex >= sequence.length) {
-                    playSound('allclear');
-                    document.getElementById('clear_text').innerText = "ALL CLEAR!!\nシャドーイング開始";
-                    document.getElementById('clear_text').style.color = "#ff0";
-                    document.getElementById('clear_text').style.textShadow = "0 0 30px #ff0, 4px 4px 0 #000";
-                    setTimeout(startFinalPhase, 3000);
-                } else {
-                    document.getElementById('clear_text').innerText = "PERFECT!";
-                    setTimeout(nextPose, 1500);
-                }
-            }
-        } else {
-            holdStartTime = null;
-            gaugeFill.style.width = '0%';
-            msgText.innerText = `${poseNames[targetId]}`;
-            msgText.style.color = "#fff";
-        }
-    }
-    canvasCtx.restore();
-}
-
-function getNormalizedJoints(poseData) {
-    if (!poseData || !poseData[11] || !poseData[12] || !poseData[23] || !poseData[24]) return null;
-    let midX = (poseData[11].x + poseData[12].x) / 2; let midY = (poseData[11].y + poseData[12].y) / 2;
-    let hipX = (poseData[23].x + poseData[24].x) / 2; let hipY = (poseData[23].y + poseData[24].y) / 2;
-    let length = Math.hypot(midX - hipX, midY - hipY) || 0.1;
-    let normPose = {};
-    EVAL_INDICES.forEach(i => { if (poseData[i]) { normPose[i] = { x: (poseData[i].x - midX) / length, y: (poseData[i].y - midY) / length }; } });
-    return normPose;
-}
-
-let tempCanvas = document.createElement('canvas');
-let tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-
-function processTeacherCanvas() {
-    requestAnimationFrame(processTeacherCanvas);
-    if (isExtractingTarget) return;
-
-    let sourceElement = null;
-    let poseData = null;
-
-    if (!isFinalPhase) {
-        let targetId = sequence[sequenceIndex];
-        sourceElement = document.getElementById(targetImageIds[targetId]);
-        poseData = rawTargetPoses[targetId];
-    } else {
-        return; 
-    }
-
-    if (sourceElement && (sourceElement.videoWidth !== 0 || sourceElement.naturalWidth !== 0)) {
-        let sWidth = sourceElement.videoWidth || sourceElement.naturalWidth;
-        let sHeight = sourceElement.videoHeight || sourceElement.naturalHeight;
-
-        if (tCanvas.width !== sWidth) {
-            tCanvas.width = sWidth; tCanvas.height = sHeight;
-            tempCanvas.width = sWidth; tempCanvas.height = sHeight;
-        }
-
-        tempCtx.clearRect(0, 0, sWidth, sHeight);
-        tempCtx.drawImage(sourceElement, 0, 0, sWidth, sHeight);
-        let frame = tempCtx.getImageData(0, 0, sWidth, sHeight);
-
-        for (let i = 0; i < frame.data.length / 4; i++) {
-            let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
-            let diff = g - Math.max(r, b);
-            if (diff > 25) { 
-                frame.data[i * 4 + 3] = 0; 
-            }
-        }
-
-        tCtx.clearRect(0, 0, sWidth, sHeight);
-        tCtx.putImageData(frame, 0, 0);
-
-        if (poseData && !isFinalPhase) {
-            tCtx.save();
-            tCtx.setLineDash([10, 10]);
-            tCtx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-            tCtx.lineWidth = 6;
-            CUSTOM_CONNECTIONS.forEach(([i, j]) => {
-                if (poseData[i] && poseData[j]) {
-                    tCtx.beginPath();
-                    tCtx.moveTo(poseData[i].x * sWidth, poseData[i].y * sHeight);
-                    tCtx.lineTo(poseData[j].x * sWidth, poseData[j].y * sHeight);
-                    tCtx.stroke();
-                }
-            });
-            tCtx.setLineDash([]);
-            tCtx.fillStyle = '#00ffff';
-            EVAL_INDICES.forEach(i => {
-                if (poseData[i]) {
-                    tCtx.beginPath();
-                    tCtx.arc(poseData[i].x * sWidth, poseData[i].y * sHeight, TEACHER_POINT_RADIUS, 0, 2*Math.PI);
-                    tCtx.fill();
-                }
-            });
-            tCtx.restore();
-        }
-    }
-}
-
-function startCamera() {
-    isExtractingTarget = false;
-    document.getElementById('start_screen').style.display = 'none';
-    
-    let targetId = sequence[sequenceIndex];
-    document.getElementById('gauge_container').style.display = 'block';
-    document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
-    
-    camera = new Camera(videoElement, { 
-        onFrame: async () => { if(!isCleared) await pose.send({image: videoElement}); }, 
-        width: 1280, height: 720 
-    });
-    camera.start();
-}
-
-function nextPose() {
-    isCleared = false;
-    holdStartTime = null;
-    document.getElementById('clear_screen').style.display = 'none';
-    document.getElementById('gauge_container').style.display = 'block';
-    
-    let targetId = sequence[sequenceIndex];
-    document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
-}
-
-function startFinalPhase() {
-    isFinalPhase = true;
-    isCleared = false;
-    
-    document.getElementById('clear_screen').style.display = 'none';
-    document.getElementById('gauge_container').style.display = 'none';
-    
-    const msg = document.getElementById('message_text');
-    msg.innerText = "FINAL PHASE\nホログラムと一緒に踊れ！";
-    msg.style.color = "#0ff";
-    
-    let finalVideo = document.getElementById('final_video');
-    let finalAudio = document.getElementById('final_audio');
-    
-    tCanvas.style.display = 'none'; 
-    finalVideo.style.display = 'block'; 
-    
-    finalVideo.currentTime = 0;
-    finalAudio.currentTime = 0;
-    
-    finalVideo.play();
-    finalAudio.play();
-
-    setTimeout(() => {
-        finalVideo.pause();
-        finalAudio.pause();
-        alert("TRAINING COMPLETE!!");
-        location.reload(); 
-    }, SHADOW_DURATION_MS);
-}
-</script>
-</body>
-</html>
+        let allPerfect = true
