@@ -24,58 +24,46 @@
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
+        /* 🌟修正: サイズ縮小(0.90)、右へ移動(10%)、端の枠を大きく削る(inset 5%)、グラデーション開始位置変更 */
         #teacher_canvas {
             position: absolute; 
             top: 15vh;     
-            left: 5%;      
+            left: 10%;      /* 🌟 頭がセンターに来るようさらに右へ */
             width: 100%; 
             height: 85vh; 
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
             opacity: 0.75; 
-            transform: scale(0.95); 
+            transform: scale(0.90); /* 🌟 サイズを少し落とす */
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
-            clip-path: inset(2% 2% 0 2%); 
+            /* 🌟 足首のグラデーションをより広く適用 */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 45%, rgba(0,0,0,0) 80%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 45%, rgba(0,0,0,0) 80%);
+            /* 🌟 枠線を確実に消すため上下左右5%を削る */
+            clip-path: inset(5% 5% 0 5%); 
         }
 
-        #final_video {
-            position: absolute; 
-            top: 15vh; 
-            left: 5%; 
-            width: 100%; 
-            height: 85vh; 
-            object-fit: contain; 
-            z-index: 3; 
-            pointer-events: none; 
-            display: none;
-            opacity: 0.75;
-            transform: scale(0.95);
-            transform-origin: center bottom;
-            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
-            clip-path: inset(2% 2% 0 2%);
-        }
-
+        /* 画像や動画は裏で処理するため非表示 */
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
+        /* 🌟修正: テキストとメーターが自然に並ぶようにFlexboxで管理 */
         .ui-layer { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
-            align-items: center; justify-content: flex-start; padding-top: 10vh; 
+            align-items: center; justify-content: flex-start; padding-top: 12vh; 
         }
         
-        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; }
+        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; flex-shrink: 0; }
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
+        /* 🌟修正: absoluteを外し、被らないようにメーターのすぐ下に配置 */
         #message_text { 
-            position: absolute; top: 12%; left: 50%; transform: translate(-50%, -50%); 
+            position: relative;
             font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
+            margin-top: 10px;
         }
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -89,11 +77,10 @@
 </head>
 <body>
 
-<img id="img_pose_0" src="pose_up.png" crossorigin="anonymous" onerror="alert('pose_up.pngが見つかりません')">
-<img id="img_pose_1" src="pose_down.png" crossorigin="anonymous" onerror="alert('pose_down.pngが見つかりません')">
+<img id="img_pose_0" src="pose_down.png" crossorigin="anonymous" onerror="alert('pose_down.pngが見つかりません')">
+<img id="img_pose_1" src="pose_up.png" crossorigin="anonymous" onerror="alert('pose_up.pngが見つかりません')">
 
-<video id="final_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>
-<audio id="final_audio" src="sample_dance.mp4" preload="auto"></audio>
+<video id="final_video" src="sample_dance.mp4" playsinline preload="auto"></video>
 
 <div id="start_screen" class="overlay">
     <h1 style="color:#0ff; font-size:40px;">DOWN & UP TRAINING</h1>
@@ -128,7 +115,6 @@ let isExtractingTarget = true;
 let isCleared = false;
 let isFinalPhase = false; 
 
-// DOWNからスタート
 const targetImageIds = ['img_pose_0', 'img_pose_1']; 
 const poseNames = ['DOWNの形', 'UPの形']; 
 const sequence = [0, 1, 0, 1, 0, 1, 0, 1]; 
@@ -136,10 +122,8 @@ let sequenceIndex = 0;
 let extractIndex = 0;
 
 let holdStartTime = null;
-const HOLD_DURATION_MS = 2000; // 静止時間2秒
+const HOLD_DURATION_MS = 2000; 
 
-const BPM = 100;
-const SHADOW_DURATION_MS = (60 / BPM) * 32 * 1000; // 約19.2秒
 const TEACHER_POINT_RADIUS = 8; 
 
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
@@ -173,7 +157,6 @@ function playSound(type) {
     }
 }
 
-// 🌟 初期化処理（AIクラッシュ防止の非同期化）
 async function initApp() {
     document.getElementById('btn_extract').style.display = 'none';
     const msg = document.getElementById('loading_msg');
@@ -190,7 +173,6 @@ async function initApp() {
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
     pose.onResults(onResults);
 
-    // 🌟 AIモデルの準備完了を待つ（これで1/2でフリーズしない）
     await pose.initialize();
 
     msg.innerText = `AIが先生の「型」を抽出します... (1/${targetImageIds.length})`;
@@ -247,16 +229,8 @@ function onResults(results) {
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
+    // 🌟修正: 最終動画再生中は生徒の点も線も描画しない（完全スルー）
     if (isFinalPhase) {
-        if (results.poseLandmarks) {
-            CUSTOM_CONNECTIONS.forEach(([i, j]) => {
-                if (results.poseLandmarks[i] && results.poseLandmarks[j]) {
-                    canvasCtx.beginPath(); canvasCtx.moveTo(results.poseLandmarks[i].x * canvas.width, results.poseLandmarks[i].y * canvas.height);
-                    canvasCtx.lineTo(results.poseLandmarks[j].x * canvas.width, results.poseLandmarks[j].y * canvas.height);
-                    canvasCtx.strokeStyle = 'rgba(0, 255, 0, 0.6)'; canvasCtx.lineWidth = 4; canvasCtx.stroke();
-                }
-            });
-        }
         canvasCtx.restore();
         return;
     }
@@ -283,9 +257,9 @@ function onResults(results) {
             let dist = Math.hypot(targetNormalized[i].x - userNorm[i].x, targetNormalized[i].y - userNorm[i].y);
 
             let color = '#ff0000'; 
-            /* 🌟 判定を少し緩く (0.25 と 0.45) */
-            if (dist < 0.25) { color = '#00ff00'; } 
-            else if (dist < 0.45) { color = '#ffff00'; allPerfect = false; } 
+            /* 🌟修正: 少しだけ判定を緩く (0.25 -> 0.30, 0.45 -> 0.50) */
+            if (dist < 0.30) { color = '#00ff00'; } 
+            else if (dist < 0.50) { color = '#ffff00'; allPerfect = false; } 
             else { allPerfect = false; }
             jointColors[i] = color;
         });
@@ -302,8 +276,8 @@ function onResults(results) {
             let lm = results.poseLandmarks[i];
             if (lm) {
                 canvasCtx.beginPath(); 
-                /* 🌟 生徒の点の大きさを16（倍）に */
-                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 16, 0, 2 * Math.PI);
+                /* 🌟修正: 生徒の点を約3倍の大きさに (8 -> 24) */
+                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 24, 0, 2 * Math.PI);
                 canvasCtx.fillStyle = jointColors[i] || '#ffffff'; canvasCtx.fill();
                 canvasCtx.strokeStyle = '#000'; canvasCtx.lineWidth = 2; canvasCtx.stroke();
             }
@@ -328,7 +302,7 @@ function onResults(results) {
                 sequenceIndex++;
                 if (sequenceIndex >= sequence.length) {
                     playSound('allclear');
-                    document.getElementById('clear_text').innerText = "ALL CLEAR!!\nシャドーイング開始";
+                    document.getElementById('clear_text').innerText = "ALL CLEAR!!";
                     document.getElementById('clear_text').style.color = "#ff0";
                     document.getElementById('clear_text').style.textShadow = "0 0 30px #ff0, 4px 4px 0 #000";
                     setTimeout(startFinalPhase, 3000);
@@ -371,8 +345,12 @@ function processTeacherCanvas() {
         let targetId = sequence[sequenceIndex];
         sourceElement = document.getElementById(targetImageIds[targetId]);
         poseData = rawTargetPoses[targetId];
+        tCanvas.style.opacity = "0.75"; // 通常の不透明度
     } else {
-        return; 
+        /* 🌟修正: 最終動画もキャンバスを通してクロマキー化！ */
+        sourceElement = document.getElementById('final_video');
+        poseData = null; // 点や線は描かない
+        tCanvas.style.opacity = "0.3"; // 🌟修正: 不透明度30%
     }
 
     if (sourceElement && (sourceElement.videoWidth !== 0 || sourceElement.naturalWidth !== 0)) {
@@ -388,6 +366,7 @@ function processTeacherCanvas() {
         tempCtx.drawImage(sourceElement, 0, 0, sWidth, sHeight);
         let frame = tempCtx.getImageData(0, 0, sWidth, sHeight);
 
+        // クロマキー処理
         for (let i = 0; i < frame.data.length / 4; i++) {
             let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
             let diff = g - Math.max(r, b);
@@ -451,35 +430,30 @@ function nextPose() {
     document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
 }
 
+// 🌟 最終シャドーイングフェーズ
 function startFinalPhase() {
     isFinalPhase = true;
     isCleared = false;
     
     document.getElementById('clear_screen').style.display = 'none';
     document.getElementById('gauge_container').style.display = 'none';
-    
-    const msg = document.getElementById('message_text');
-    msg.innerText = "FINAL PHASE\nホログラムと一緒に踊れ！";
-    msg.style.color = "#0ff";
+    document.getElementById('message_text').innerText = ""; 
     
     let finalVideo = document.getElementById('final_video');
-    let finalAudio = document.getElementById('final_audio');
     
-    tCanvas.style.display = 'none'; 
-    finalVideo.style.display = 'block'; 
-    
+    // 🌟修正: 動画（音楽付き）を再生し、裏でクロマキー描画させる
     finalVideo.currentTime = 0;
-    finalAudio.currentTime = 0;
-    
+    finalVideo.loop = true; 
+    finalVideo.muted = false; // 音を出す
     finalVideo.play();
-    finalAudio.play();
 
+    // 🌟 3秒の動画を8回ループ想定 = 24秒経過で終了
     setTimeout(() => {
         finalVideo.pause();
-        finalAudio.pause();
+        isFinalPhase = false;
         alert("TRAINING COMPLETE!!");
         location.reload(); 
-    }, SHADOW_DURATION_MS);
+    }, 24000);
 }
 </script>
 </body>
