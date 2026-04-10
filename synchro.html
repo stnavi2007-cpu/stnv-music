@@ -139,11 +139,12 @@
         }
 
         /* 🌟 名前入力欄のスタイル */
-        #user_name_input {
+        .login-input {
             background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; 
             font-family: 'Montserrat', 'Noto Sans JP', sans-serif; font-size: 24px; 
-            padding: 10px; text-align: center; width: 250px; margin-top: 20px; 
+            padding: 10px; text-align: center; width: 250px; 
             outline: none; box-shadow: 0 0 10px rgba(0,255,255,0.3); border-radius: 6px;
+            display: block; margin: 10px auto;
         }
 
         .btn { 
@@ -211,7 +212,8 @@
 <div id="start_screen" class="overlay">
     <h1 style="color:#0ff; font-size:40px;">STYLE TRAINING</h1>
     <p id="loading_msg" style="color:#aaa;">起動準備中...</p>
-    <input type="text" id="user_name_input" placeholder="名前を入力" maxlength="10">
+    <input type="text" id="user_name_input" class="login-input" placeholder="名前を入力" maxlength="20">
+    <input type="password" id="user_pass_input" class="login-input" placeholder="パスワードを入力" maxlength="20">
     <button class="btn" id="btn_extract" onclick="initApp()">START</button>
     <button class="btn" id="btn_start" onclick="startCamera()" style="display:none;">TRAINING START</button>
 </div>
@@ -237,10 +239,11 @@
 
 <script>
 // 🌟 ここにGASのURLを貼り付けてください！
-const GAS_URL = "ここにGASのURLを貼り付けてください";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
-// 🌟 ユーザー名保存用
+// 🌟 ユーザー名とパスワード保存用
 let userName = "";
+let userPass = "";
 
 let pose, camera, canvasCtx, canvas, videoElement;
 let tCanvas, tCtx;
@@ -318,15 +321,19 @@ function playSound(type) {
 }
 
 async function initApp() {
-    // 🌟 名前が入力されているかチェック
-    let input = document.getElementById('user_name_input').value;
-    if(!input) {
-        alert("名前を入力してください！");
+    // 🌟 名前とパスワードが入力されているかチェック
+    let inputName = document.getElementById('user_name_input').value;
+    let inputPass = document.getElementById('user_pass_input').value;
+    
+    if(!inputName || !inputPass) {
+        alert("名前とパスワードを入力してください！");
         return;
     }
-    userName = input;
+    userName = inputName;
+    userPass = inputPass;
 
     document.getElementById('user_name_input').style.display = 'none';
+    document.getElementById('user_pass_input').style.display = 'none';
     document.getElementById('btn_extract').style.display = 'none';
     const msg = document.getElementById('loading_msg');
     msg.innerText = "AIエンジン起動中...";
@@ -824,15 +831,19 @@ function showFinalResult() {
     
     playSound('allclear');
 
-    // 🌟 GASへ送信（名前と合計点のみ）
-    if (GAS_URL !== "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec") {
-        fetch(GAS_URL, {
-            method: "POST",
-            body: JSON.stringify({ name: userName, total: total })
-        }).catch(e => console.error("送信エラー:", e));
-    }
+    // 🌟 GASへ送信（名前とパスワードと合計点を送信）
+    fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify({ name: userName, pass: userPass, total: total })
+    })
+    .then(response => response.text())
+    .then(text => {
+        if(text === "wrong_password") alert("パスワードが違います。スコアは保存されません。");
+        else if(text === "user_not_found") alert("名前が登録されていません。スコアは保存されません。");
+    })
+    .catch(e => console.error("送信エラー:", e));
     
-    // ランキング画面を消したため、7秒後にリロード
+    // 7秒後にリロード
     setTimeout(() => {
         location.reload();
     }, 7000);
