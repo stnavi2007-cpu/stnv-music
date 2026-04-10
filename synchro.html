@@ -510,7 +510,8 @@ function updateScore() {
                 }
             });
 
-            let activeThreshold = Math.max(0.015, maxMovement * 0.2);
+            // 【変更箇所】最大動作量の25%未満を採点対象から除外（アイソレーション強化）
+            let activeThreshold = Math.max(0.015, maxMovement * 0.25);
             let groupTotalWeight = 0;
             let weightedScoreSum = 0;
 
@@ -539,8 +540,30 @@ function updateScore() {
                     let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
                     let posScore = Math.max(0, 1.0 - (posDiff / 0.3));
 
-                    if (uMag < 0.01) {
+                    // 【変更箇所】ズル防止機能の強化（棒立ちキラー＆デタラメ暴れキラー）
+                    if (uMag <= 0.015) {
+                        // 棒立ちキラー：移動量がノイズレベル(0.015以下)なら強制0点
                         posScore = 0;
+                    } else {
+                        // デタラメ暴れキラー：方向が全く違う場合は0点
+                        let prevTNorm = prevT ? getNormalizedJoints(prevT, false) : null;
+                        if (prevTNorm && prevTNorm[i] && uPast && uPast[i]) {
+                            let tx = tNorm[i].x - prevTNorm[i].x;
+                            let ty = tNorm[i].y - prevTNorm[i].y;
+                            let ux = uNorm[i].x - uPast[i].x;
+                            let uy = uNorm[i].y - uPast[i].y;
+                            
+                            let tLen = Math.hypot(tx, ty);
+                            let uLen = Math.hypot(ux, uy);
+                            
+                            if (tLen > 0.02 && uLen > 0.02) {
+                                let dot = (tx * ux) + (ty * uy);
+                                let cosTheta = dot / (tLen * uLen);
+                                if (cosTheta < 0) { // 進行方向が90度以上異なる（逆方向など）
+                                    posScore = 0;
+                                }
+                            }
+                        }
                     }
 
                     let jointScore = 100 * posScore;
