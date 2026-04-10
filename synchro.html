@@ -80,7 +80,7 @@
             align-items: center; justify-content: flex-start; padding-top: 10vh; 
         }
         
-        /* 🌟 メーターのサイバー化 */
+        /* 🌟 メーターのサイバー化 & 重なり調整 */
         #gauge_container { 
             width: 80%; height: 20px; 
             border: 2px solid #0ff; 
@@ -89,6 +89,8 @@
             box-shadow: 0 0 15px rgba(0,255,255,0.6); 
             display: none; margin-bottom: 15px; 
             backdrop-filter: blur(4px);
+            z-index: 5; /* 文字より下に */
+            position: relative;
         }
         #gauge_fill { 
             width: 0%; height: 100%; 
@@ -97,7 +99,7 @@
             transition: width 0.1s linear; 
         }
         
-        /* 🌟 メッセージのHUD（ヘッドアップディスプレイ）化 */
+        /* 🌟 メッセージのHUD（ヘッドアップディスプレイ）化 & 重なり調整 */
         #message_text { 
             position: absolute; top: 11%; left: 50%; transform: translate(-50%, -50%); 
             font-size: 25px; color: #fff; 
@@ -108,6 +110,7 @@
             border-bottom: 1px solid rgba(0, 255, 255, 0.6);
             padding: 8px 0;
             box-shadow: 0px 4px 15px rgba(0,0,0,0.6);
+            z-index: 10; /* バーより上に */
         }
         
         /* 🌟 背景に電子グリッドを追加 */
@@ -125,7 +128,7 @@
         .overlay h1 {
             text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff;
             letter-spacing: 4px;
-            animation: pulse 2s infinite alternate;
+            animation: pulse_blue 2s infinite alternate;
         }
 
         /* 🌟 近未来のホログラムボタン化 */
@@ -149,16 +152,35 @@
             background: rgba(0,255,255,0.3);
         }
         
-        #clear_screen { display: none; background: rgba(0, 255, 0, 0.15); backdrop-filter: blur(8px); z-index: 200; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
-        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 20px #0f0, 4px 4px 0 #000; animation: flash_text 0.6s infinite alternate; margin-bottom: 20px; text-align: center;}
+        /* 🌟 リザルト画面の装飾（ダサさ払拭） */
+        #clear_screen { 
+            display: none; 
+            background: rgba(0, 10, 20, 0.85); /* 深い青黒背景 */
+            backdrop-filter: blur(8px); 
+            z-index: 200; 
+            flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; 
+            box-shadow: inset 0 0 100px rgba(0,255,0,0.3); /* 緑の発光 */
+            border: 4px solid #0f0; /* 緑の枠線 */
+        }
+        /*PERFECT/ALL CLEARを勝利のゴールドに */
+        #clear_text { 
+            font-size: 80px; 
+            background: linear-gradient(to bottom, #fff 0%, #ff0 50%, #f90 100%); /* ゴールドグラデーション */
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255,255,0,0.8), 4px 4px 0 #000; 
+            animation: flash_text 0.6s infinite alternate; 
+            margin-bottom: 20px; text-align: center;
+        }
         
-        @keyframes pulse {
+        /* アニメーション設定 */
+        @keyframes pulse_blue {
             0% { opacity: 0.8; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; }
             100% { opacity: 1; text-shadow: 0 0 15px #0ff, 0 0 30px #0ff, 0 0 50px #0ff; }
         }
         @keyframes flash_text { 
             from { opacity: 0.8; transform: scale(1); } 
-            to { opacity: 1; transform: scale(1.05); text-shadow: 0 0 40px #0f0, 4px 4px 0 #000; } 
+            to { opacity: 1; transform: scale(1.05); } 
         }
         
         /* 🌟 写真撮影時のフラッシュ演出 */
@@ -243,8 +265,7 @@ const ANGLE_EVAL_GROUPS = [
 
 let examScores = { down: 0, up: 0 };
 let currentExamPoseIndex = 0; 
-let latestUserLandmarks = null;         // 描画用（生の座標）
-let latestUserLandmarksMirrored = null; // 採点用（反転した座標）
+let latestUserLandmarks = null; 
 
 let audioCtx;
 function playSound(type) {
@@ -353,14 +374,8 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     if (results.poseLandmarks) {
+        // 🌟 生徒の点は鏡合わせにしない（カメラ映像と同じ向きにする）
         latestUserLandmarks = results.poseLandmarks;
-
-        let userPose = [...results.poseLandmarks];
-        const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
-        latestUserLandmarksMirrored = userPose.map((lm, i) => {
-            let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
-            return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
-        });
     }
 
     if (isFinalPhase || isExamPhase) {
@@ -380,8 +395,8 @@ function onResults(results) {
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
-    if (results.poseLandmarks && targetNormalized && latestUserLandmarksMirrored) {
-        let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
+    if (results.poseLandmarks && targetNormalized && latestUserLandmarks) {
+        let userNorm = getNormalizedJoints(latestUserLandmarks);
         if (!userNorm) { canvasCtx.restore(); return; }
 
         let allPerfect = true;
@@ -436,8 +451,6 @@ function onResults(results) {
                 if (sequenceIndex >= sequence.length) {
                     playSound('allclear');
                     document.getElementById('clear_text').innerText = "ALL CLEAR!!";
-                    document.getElementById('clear_text').style.color = "#ff0";
-                    document.getElementById('clear_text').style.textShadow = "0 0 30px #ff0, 4px 4px 0 #000";
                     setTimeout(startFinalPhase, 3000);
                 } else {
                     document.getElementById('clear_text').innerText = "PERFECT!";
@@ -619,7 +632,8 @@ function startFinalPhase() {
     finalVideo.ontimeupdate = function() {
         if (finalVideo.currentTime >= ONE_EIGHT_SECONDS) {
             fCanvas.style.display = 'none'; 
-            msg.innerText = ""; 
+            // 🌟 ここでメッセージを消していたタイマーを削除
+            // msg.innerText = ""; 
         }
     };
     
@@ -692,10 +706,12 @@ function takeSnapshotAndScore() {
             examScores.up = score;
         }
         
+        // 🌟 判定中テキストを消して、ど真ん中（clear_screen）に点数をドーンと出す！
         msg.innerText = "";
         
         document.getElementById('clear_screen').style.display = 'flex';
-        document.getElementById('clear_text').innerHTML = `${poseNames[currentExamPoseIndex]}<br><span style="font-size:120px; color:#fff;">${score}</span> 点！`;
+        // でかく、カッコよく！
+        document.getElementById('clear_text').innerHTML = `${poseNames[currentExamPoseIndex]}<br><span style="font-size:120px; color:#fff; text-shadow:0 0 20px #fff;">${score}</span> 点！`;
         document.getElementById('clear_text').style.color = score >= 80 ? "#0f0" : "#ff0";
         
         playSound(score >= 80 ? 'clear' : 'tick');
@@ -708,16 +724,16 @@ function takeSnapshotAndScore() {
             } else {
                 showFinalResult();
             }
-        }, 3000);
+        }, 3000); // 3秒見せる
         
     }, 100);
 }
 
 function calculateExamScore(poseIndex) {
-    if (!latestUserLandmarksMirrored) return 0;
+    if (!latestUserLandmarks) return 0;
     
     let targetLandmarks = rawTargetPoses[poseIndex]; 
-    let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
+    let userNorm = getNormalizedJoints(latestUserLandmarks);
     let targetNorm = getNormalizedJoints(targetLandmarks);
     
     if (!userNorm || !targetNorm) return 0;
@@ -740,7 +756,7 @@ function calculateExamScore(poseIndex) {
 
     ANGLE_EVAL_GROUPS.forEach(group => {
         let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
-        let aU = latestUserLandmarksMirrored[group[0]], bU = latestUserLandmarksMirrored[group[1]], cU = latestUserLandmarksMirrored[group[2]];
+        let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
         
         if(aT && bT && cT && aU && bU && cU) {
             let angleT = calculateAngle(aT, bT, cT);
@@ -772,7 +788,8 @@ function showFinalResult() {
     else if (total >= 120) rank = "B";
 
     document.getElementById('clear_screen').style.display = 'flex';
-    document.getElementById('clear_text').innerHTML = `TOTAL SCORE<br><span style="font-size:120px; color:#fff;">${total}</span> / 200 点<br>RANK: <span style="font-size:100px; color:#f0f;">${rank}</span>`;
+    // カッコよく！！
+    document.getElementById('clear_text').innerHTML = `TOTAL SCORE<br><span style="font-size:120px; color:#fff; text-shadow:0 0 20px #fff;">${total}</span> / 200 点<br>RANK: <span style="font-size:100px; color:#f0f; text-shadow:0 0 20px #f0f;">${rank}</span>`;
     
     playSound('allclear');
     
