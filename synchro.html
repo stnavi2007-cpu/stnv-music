@@ -44,7 +44,7 @@
     
             -webkit-mask-composite: source-in;
             mask-composite: intersect;
-            clip-path: inset(5% 5% 0 2%);
+            clip-path: inset(5% 5% 0 2%); 
         }
 
         #final_video {
@@ -418,8 +418,10 @@ function processTeacherCanvas() {
     } else {
         let fVideo = document.getElementById('final_video');
         if (fVideo.readyState >= 2) {
-            let sWidth = fVideo.videoWidth;
-            let sHeight = fVideo.videoHeight;
+            // 軽量化のため、描画サイズを少し小さくして処理負荷を軽減する（ズレ対策）
+            let scaleFactor = 0.5; // 50%に縮小して解析
+            let sWidth = fVideo.videoWidth * scaleFactor;
+            let sHeight = fVideo.videoHeight * scaleFactor;
 
             if (fCanvas.width !== sWidth) {
                 fCanvas.width = sWidth; fCanvas.height = sHeight;
@@ -459,7 +461,8 @@ function startCamera() {
     camera.start();
 
     let finalVideo = document.getElementById('final_video');
-    finalVideo.muted = false;
+    // スタート時に音が出ないように、ミュートのまま一瞬再生してロック解除
+    finalVideo.muted = true;
     finalVideo.play().then(() => {
         finalVideo.pause();
         finalVideo.currentTime = 0;
@@ -492,6 +495,7 @@ function startFinalPhase() {
     tCanvas.style.display = 'none'; 
     fCanvas.style.display = 'block'; 
     
+    // ここで初めて音を出す
     finalVideo.muted = false;
     finalVideo.currentTime = 0;
     
