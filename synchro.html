@@ -77,10 +77,12 @@
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
         .ui-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
-            align-items: center; justify-content: flex-start; padding-top: 10vh; 
-        }
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+    pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
+    align-items: center; 
+    justify-content: flex-start; 
+    padding-top: 25vh; /* ⬅️バーの開始位置をここで固定しました */
+}
         
         #gauge_container { 
             width: 80%; height: 20px; 
