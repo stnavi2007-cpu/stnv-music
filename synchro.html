@@ -105,8 +105,8 @@
 <video id="final_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>
 <div id="start_screen" class="overlay">
     <h1 style="color:#0ff; font-size:40px;">STYLE TRAINING</h1>
-    <p id="loading_msg">AI起動準備中...</p>
-    <button class="btn" id="btn_extract" onclick="initApp()">EXTRACT POSE (AI解析)</button>
+    <p id="loading_msg">起動準備中...</p>
+    <button class="btn" id="btn_extract" onclick="initApp()">START</button>
     <button class="btn" id="btn_start" onclick="startCamera()" style="display:none;">TRAINING START</button>
 </div>
 
@@ -484,7 +484,7 @@ function startFinalPhase() {
     document.getElementById('gauge_container').style.display = 'none';
     
     const msg = document.getElementById('message_text');
-    msg.innerText = "FINAL PHASE\nホログラムと一緒に踊れ！";
+    msg.innerText = "練習してみよう！";
     msg.style.color = "#0ff";
     
     let finalVideo = document.getElementById('final_video');
