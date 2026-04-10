@@ -24,6 +24,74 @@
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
+        /* 🌟 ホログラムのレイアウトとグラデーションマスク */
+        #teacher_canvas {
+            position: absolute; 
+            top: 15vh;     /* 少し下に配置 */
+            left: 5%;      /* 🌟 センターから少し右へ移動 */
+            width: 100%; 
+            height: 85vh; 
+            object-fit: contain; 
+            z-index: 2; 
+            pointer-events: none;
+            opacity: 0.75; /* ホログラム感 */
+            transform: scale(0.95); /* 🌟 サイズを少し落とす */
+            transform-origin: center bottom;
+            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            /* 🌟 グラデーションの開始位置を上げ、確実に足首の境目を消す */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            /* 上、左、右の端2%を削り落として黒枠を消す */
+            clip-path: inset(2% 2% 0 2%); 
+        }
+
+        /* 最終フェーズの動画（上記と同じ修正を適用） */
+        #final_video {
+            position: absolute; 
+            top: 15vh; 
+            left: 5%; 
+            width: 100%; 
+            height: 85vh; 
+            object-fit: contain; 
+            z-index: 3; 
+            pointer-events: none; 
+            display: none;
+            opacity: 0.75;
+            transform: scale(0.95);
+            transform-origin: center bottom;
+            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            clip-path: inset(2% 2% 0 2%);
+        }
+
+        /* 画像や音声は裏で処理するため非表示 */
+        img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
+        
+        .ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
+            align-items: center; justify-content: flex-start; padding-top: 10vh; 
+        }
+        
+        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; }
+        #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
+        
+        /* 🌟 文字が顔に被らないように配置を調整 */
+        #message_text { 
+            position: absolute; top: 12%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
+            font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
+        }
+        
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .btn { padding: 15px 40px; background: #0f0; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto; }
+        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
+        
+        #clear_screen { display: none; background: rgba(0, 255, 0, 0.2); backdrop-filter: blur(5px); z-index: 200; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
+        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 30px #0f0, 4px 4px 0 #000; animation: flash 0.5s infinite alternate; margin-bottom: 20px;}
+        @keyframes flash { from { opacity: 0.7; transform: scale(1); } to { opacity: 1; transform: scale(1.1); } }
+        
         /* 🌟修正: 枠を完全に消すために inset(5% 5% 0 5%) を適用 */
         #teacher_canvas {
             position: absolute; 
@@ -43,11 +111,11 @@
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 90%, rgba(0,0,0,0) 95%), 
                 linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 15%, rgba(0,0,0,1) 85%, rgba(0,0,0,0) 95%);
     
-    /* マスクを重ねるための設定（これ必須！） */
-    -webkit-mask-composite: source-in;
-    mask-composite: intersect;
+            /* マスクを重ねるための設定（これ必須！） */
+            -webkit-mask-composite: source-in;
+            mask-composite: intersect;
             /* 🌟 上下左右を2%ずつ削り落として、フチの黒線を消す設定 */
-    clip-path: inset(5% 5% 0 2%); /* 上2%、右2%、下0%、左2% を削る */
+            clip-path: inset(5% 5% 0 2%); /* 上2%、右2%、下0%、左2% を削る */
         }
 
         /* 最終フェーズの動画（クロマキーとホログラム化はキャンバス側で行うため、ビデオ自体は非表示に） */
@@ -74,7 +142,6 @@
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             clip-path: inset(5% 5% 0 5%);
-            radial-gradient(ellipse at center, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 90%);radial-gradient(ellipse at center, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 90%);
         }
 
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
@@ -424,7 +491,6 @@ function processTeacherCanvas() {
             }
         }
     } else {
-        // 🌟 最終フェーズの動画クロマキー処理
         let fVideo = document.getElementById('final_video');
         if (fVideo.readyState >= 2) {
             let sWidth = fVideo.videoWidth;
@@ -466,6 +532,14 @@ function startCamera() {
         width: 1280, height: 720 
     });
     camera.start();
+
+    // 🌟追加：音声付き動画をスマホで再生するためのロック解除
+    let finalVideo = document.getElementById('final_video');
+    finalVideo.muted = false;
+    finalVideo.play().then(() => {
+        finalVideo.pause();
+        finalVideo.currentTime = 0;
+    }).catch(e => console.log(e));
 }
 
 function nextPose() {
@@ -478,7 +552,6 @@ function nextPose() {
     document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
 }
 
-// 🌟 最終シャドーイングフェーズ
 let playCount = 0;
 function startFinalPhase() {
     isFinalPhase = true;
@@ -494,13 +567,11 @@ function startFinalPhase() {
     let finalVideo = document.getElementById('final_video');
     
     tCanvas.style.display = 'none'; 
-    fCanvas.style.display = 'block'; // クロマキーキャンバスを表示
+    fCanvas.style.display = 'block'; 
     
-    // 🌟 動画の音声をONにしてループ再生
     finalVideo.muted = false;
     finalVideo.currentTime = 0;
     
-    // 🌟 動画が最後まで再生されたらカウントし、8回で終了
     finalVideo.onended = function() {
         playCount++;
         if (playCount < 8) {
