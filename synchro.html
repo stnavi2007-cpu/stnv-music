@@ -17,6 +17,7 @@
         
         #video_container { 
             position: relative; width: 100vw; height: 100vh; background: #222; 
+            box-shadow: inset 0 0 50px rgba(0,255,255,0.2); /* 画面端にうっすらサイバーな影 */
         }
         
         #output_canvas { 
@@ -79,22 +80,86 @@
             align-items: center; justify-content: flex-start; padding-top: 10vh; 
         }
         
-        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; }
-        #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
-        
-        #message_text { 
-            position: absolute; top: 11%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 25px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
-            font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
+        /* 🌟 メーターのサイバー化 */
+        #gauge_container { 
+            width: 80%; height: 20px; 
+            border: 2px solid #0ff; 
+            background: rgba(0,30,40,0.7); 
+            border-radius: 10px; overflow: hidden; 
+            box-shadow: 0 0 15px rgba(0,255,255,0.6); 
+            display: none; margin-bottom: 15px; 
+            backdrop-filter: blur(4px);
+        }
+        #gauge_fill { 
+            width: 0%; height: 100%; 
+            background: linear-gradient(90deg, #0f0, #0ff); 
+            box-shadow: 0 0 10px #0ff;
+            transition: width 0.1s linear; 
         }
         
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .btn { padding: 15px 40px; background: #0f0; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto; }
-        .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
+        /* 🌟 メッセージのHUD（ヘッドアップディスプレイ）化 */
+        #message_text { 
+            position: absolute; top: 11%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 25px; color: #fff; 
+            text-shadow: 0 0 10px #0ff, 2px 2px 0 #000; 
+            font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.3), transparent);
+            border-top: 1px solid rgba(0, 255, 255, 0.6);
+            border-bottom: 1px solid rgba(0, 255, 255, 0.6);
+            padding: 8px 0;
+            box-shadow: 0px 4px 15px rgba(0,0,0,0.6);
+        }
         
-        #clear_screen { display: none; background: rgba(0, 255, 0, 0.2); backdrop-filter: blur(5px); z-index: 200; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
-        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 30px #0f0, 4px 4px 0 #000; animation: flash 0.5s infinite alternate; margin-bottom: 20px; text-align: center;}
-        @keyframes flash { from { opacity: 0.7; transform: scale(1); } to { opacity: 1; transform: scale(1.1); } }
+        /* 🌟 背景に電子グリッドを追加 */
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: 
+                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+                radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%);
+            background-size: 30px 30px, 30px 30px, 100% 100%;
+            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
+        }
+
+        /* 🌟 タイトルロゴの発光アニメーション */
+        .overlay h1 {
+            text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff;
+            letter-spacing: 4px;
+            animation: pulse 2s infinite alternate;
+        }
+
+        /* 🌟 近未来のホログラムボタン化 */
+        .btn { 
+            padding: 15px 50px; 
+            background: linear-gradient(45deg, rgba(0,50,50,0.8), rgba(0,100,100,0.8));
+            color: #0ff; 
+            border: 2px solid #0ff; 
+            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; 
+            cursor: pointer; margin-top: 30px; 
+            box-shadow: 0 0 15px rgba(0,255,255,0.4), inset 0 0 10px rgba(0,255,255,0.2); 
+            text-shadow: 0 0 8px #0ff;
+            border-radius: 6px;
+            transition: all 0.2s ease-out; 
+            pointer-events: auto; 
+            text-transform: uppercase;
+        }
+        .btn:active { 
+            transform: scale(0.95); 
+            box-shadow: 0 0 5px #0ff, inset 0 0 5px #0ff; 
+            background: rgba(0,255,255,0.3);
+        }
+        
+        #clear_screen { display: none; background: rgba(0, 255, 0, 0.15); backdrop-filter: blur(8px); z-index: 200; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
+        #clear_text { font-size: 80px; color: #0f0; text-shadow: 0 0 20px #0f0, 4px 4px 0 #000; animation: flash_text 0.6s infinite alternate; margin-bottom: 20px; text-align: center;}
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; }
+            100% { opacity: 1; text-shadow: 0 0 15px #0ff, 0 0 30px #0ff, 0 0 50px #0ff; }
+        }
+        @keyframes flash_text { 
+            from { opacity: 0.8; transform: scale(1); } 
+            to { opacity: 1; transform: scale(1.05); text-shadow: 0 0 40px #0f0, 4px 4px 0 #000; } 
+        }
         
         /* 🌟 写真撮影時のフラッシュ演出 */
         #flash_overlay {
@@ -112,7 +177,7 @@
 <video id="final_video" src="sample_dance.mp4" playsinline muted preload="auto"></video>
 <div id="start_screen" class="overlay">
     <h1 style="color:#0ff; font-size:40px;">STYLE TRAINING</h1>
-    <p id="loading_msg">起動準備中...</p>
+    <p id="loading_msg" style="color:#aaa;">起動準備中...</p>
     <button class="btn" id="btn_extract" onclick="initApp()">START</button>
     <button class="btn" id="btn_start" onclick="startCamera()" style="display:none;">TRAINING START</button>
 </div>
@@ -178,7 +243,8 @@ const ANGLE_EVAL_GROUPS = [
 
 let examScores = { down: 0, up: 0 };
 let currentExamPoseIndex = 0; 
-let latestUserLandmarks = null; 
+let latestUserLandmarks = null;         // 描画用（生の座標）
+let latestUserLandmarksMirrored = null; // 採点用（反転した座標）
 
 let audioCtx;
 function playSound(type) {
@@ -287,8 +353,14 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     if (results.poseLandmarks) {
-        // 🌟 呪いの反転処理（MIRROR_MAP）を完全に削除し、そのままの生座標だけを使用
         latestUserLandmarks = results.poseLandmarks;
+
+        let userPose = [...results.poseLandmarks];
+        const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
+        latestUserLandmarksMirrored = userPose.map((lm, i) => {
+            let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
+            return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
+        });
     }
 
     if (isFinalPhase || isExamPhase) {
@@ -308,8 +380,8 @@ function onResults(results) {
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
-    if (results.poseLandmarks && targetNormalized && latestUserLandmarks) {
-        let userNorm = getNormalizedJoints(latestUserLandmarks);
+    if (results.poseLandmarks && targetNormalized && latestUserLandmarksMirrored) {
+        let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
         if (!userNorm) { canvasCtx.restore(); return; }
 
         let allPerfect = true;
@@ -620,7 +692,6 @@ function takeSnapshotAndScore() {
             examScores.up = score;
         }
         
-        // 🌟 判定中テキストを消して、ど真ん中（clear_screen）に点数をドーンと出す！
         msg.innerText = "";
         
         document.getElementById('clear_screen').style.display = 'flex';
@@ -643,10 +714,10 @@ function takeSnapshotAndScore() {
 }
 
 function calculateExamScore(poseIndex) {
-    if (!latestUserLandmarks) return 0;
+    if (!latestUserLandmarksMirrored) return 0;
     
     let targetLandmarks = rawTargetPoses[poseIndex]; 
-    let userNorm = getNormalizedJoints(latestUserLandmarks);
+    let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
     let targetNorm = getNormalizedJoints(targetLandmarks);
     
     if (!userNorm || !targetNorm) return 0;
@@ -669,7 +740,7 @@ function calculateExamScore(poseIndex) {
 
     ANGLE_EVAL_GROUPS.forEach(group => {
         let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
-        let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
+        let aU = latestUserLandmarksMirrored[group[0]], bU = latestUserLandmarksMirrored[group[1]], cU = latestUserLandmarksMirrored[group[2]];
         
         if(aT && bT && cT && aU && bU && cU) {
             let angleT = calculateAngle(aT, bT, cT);
