@@ -44,7 +44,8 @@
     
             -webkit-mask-composite: source-in;
             mask-composite: intersect;
-            clip-path: inset(5% 15% 0 2%); 
+            /* 🌟右の線を消すために右側を15%に修正 */
+            clip-path: inset(5% 15% 0 5%);
         }
 
         #final_video {
@@ -68,6 +69,7 @@
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            /* 🌟右の線を消すために右側を15%に修正 */
             clip-path: inset(5% 15% 0 5%);
         }
 
@@ -83,8 +85,8 @@
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
         #message_text { 
-            position: absolute; top: 11%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 25px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
+            position: absolute; top: 19%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
         }
         
@@ -416,12 +418,13 @@ function processTeacherCanvas() {
             }
         }
     } else {
+        // 🌟 映像が非表示（display:none）になったら、重い処理を完全にストップさせる
+        if (fCanvas.style.display === 'none') return;
+
         let fVideo = document.getElementById('final_video');
         if (fVideo.readyState >= 2) {
-            // 軽量化のため、描画サイズを少し小さくして処理負荷を軽減する（ズレ対策）
-            let scaleFactor = 0.5; // 50%に縮小して解析
-            let sWidth = fVideo.videoWidth * scaleFactor;
-            let sHeight = fVideo.videoHeight * scaleFactor;
+            let sWidth = fVideo.videoWidth;
+            let sHeight = fVideo.videoHeight;
 
             if (fCanvas.width !== sWidth) {
                 fCanvas.width = sWidth; fCanvas.height = sHeight;
@@ -461,8 +464,7 @@ function startCamera() {
     camera.start();
 
     let finalVideo = document.getElementById('final_video');
-    // スタート時に音が出ないように、ミュートのまま一瞬再生してロック解除
-    finalVideo.muted = true;
+    finalVideo.muted = true; // スタート時は音を出さない
     finalVideo.play().then(() => {
         finalVideo.pause();
         finalVideo.currentTime = 0;
@@ -495,9 +497,18 @@ function startFinalPhase() {
     tCanvas.style.display = 'none'; 
     fCanvas.style.display = 'block'; 
     
-    // ここで初めて音を出す
     finalVideo.muted = false;
     finalVideo.currentTime = 0;
+    
+    // 🌟 【ココを変更してください】映像を消すタイミング（秒）
+    const ONE_EIGHT_SECONDS = 4.0; // 例: 4秒後に消える
+    
+    finalVideo.ontimeupdate = function() {
+        if (finalVideo.currentTime >= ONE_EIGHT_SECONDS) {
+            fCanvas.style.display = 'none'; // 映像を消す
+            msg.innerText = ""; // ついでに文字も消したい場合はこれを残す
+        }
+    };
     
     finalVideo.onended = function() {
         location.reload(); 
