@@ -178,7 +178,8 @@ const ANGLE_EVAL_GROUPS = [
 
 let examScores = { down: 0, up: 0 };
 let currentExamPoseIndex = 0; 
-let latestUserLandmarks = null; 
+let latestUserLandmarks = null;         // 描画用（生の座標）
+let latestUserLandmarksMirrored = null; // 採点用（反転した座標）
 
 let audioCtx;
 function playSound(type) {
@@ -287,9 +288,13 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
     if (results.poseLandmarks) {
+        // 描画用（そのままの座標）
+        latestUserLandmarks = results.poseLandmarks;
+
+        // 採点用（鏡合わせに反転した座標）
         let userPose = [...results.poseLandmarks];
         const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27};
-        latestUserLandmarks = userPose.map((lm, i) => {
+        latestUserLandmarksMirrored = userPose.map((lm, i) => {
             let mapI = MIRROR_MAP[i] !== undefined ? MIRROR_MAP[i] : i;
             return userPose[mapI] ? { x: 1.0 - userPose[mapI].x, y: userPose[mapI].y, z: userPose[mapI].z, visibility: userPose[mapI].visibility } : lm;
         });
@@ -312,8 +317,8 @@ function onResults(results) {
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
-    if (results.poseLandmarks && targetNormalized && latestUserLandmarks) {
-        let userNorm = getNormalizedJoints(latestUserLandmarks);
+    if (results.poseLandmarks && targetNormalized && latestUserLandmarksMirrored) {
+        let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
         if (!userNorm) { canvasCtx.restore(); return; }
 
         let allPerfect = true;
@@ -331,7 +336,7 @@ function onResults(results) {
         });
 
         CUSTOM_CONNECTIONS.forEach(([i, j]) => {
-            if (results.poseLandmarks[i] && results.poseLandmarks[j]) {
+            if (latestUserLandmarks[i] && latestUserLandmarks[j]) {
                 canvasCtx.beginPath(); canvasCtx.moveTo(latestUserLandmarks[i].x * canvas.width, latestUserLandmarks[i].y * canvas.height);
                 canvasCtx.lineTo(latestUserLandmarks[j].x * canvas.width, latestUserLandmarks[j].y * canvas.height);
                 canvasCtx.strokeStyle = 'rgba(255,255,255,0.5)'; canvasCtx.lineWidth = 4; canvasCtx.stroke();
@@ -640,12 +645,11 @@ function takeSnapshotAndScore() {
     }, 100);
 }
 
-// 🌟 【神バランス調整版】最強の絶対評価：階段式ペナルティ
 function calculateExamScore(poseIndex) {
-    if (!latestUserLandmarks) return 0;
+    if (!latestUserLandmarksMirrored) return 0;
     
     let targetLandmarks = rawTargetPoses[poseIndex]; 
-    let userNorm = getNormalizedJoints(latestUserLandmarks);
+    let userNorm = getNormalizedJoints(latestUserLandmarksMirrored);
     let targetNorm = getNormalizedJoints(targetLandmarks);
     
     if (!userNorm || !targetNorm) return 0;
@@ -653,25 +657,22 @@ function calculateExamScore(poseIndex) {
     let totalScore = 100;
     let penalty = 0;
 
-    // 1. 関節の相対距離（比率）による階段式ペナルティ
     EVAL_INDICES.forEach(i => {
         if (!targetNorm[i] || !userNorm[i]) return;
         let dist = Math.hypot(targetNorm[i].x - userNorm[i].x, targetNorm[i].y - userNorm[i].y);
         
         if (dist > 0.25) {
-            penalty += 10; // 致命的なズレ（手足が全然違う場所にある等）
+            penalty += 10; 
         } else if (dist > 0.15) {
-            penalty += 4;  // 結構ズレている
+            penalty += 4;  
         } else if (dist > 0.08) {
-            penalty += 1;  // おしい！（ほんの少しズレている）
+            penalty += 1;  
         }
-        // 0.08以下のズレは「誤差（セーフ）」として減点なし！
     });
 
-    // 2. 関節の角度による階段式ペナルティ
     ANGLE_EVAL_GROUPS.forEach(group => {
         let aT = targetLandmarks[group[0]], bT = targetLandmarks[group[1]], cT = targetLandmarks[group[2]];
-        let aU = latestUserLandmarks[group[0]], bU = latestUserLandmarks[group[1]], cU = latestUserLandmarks[group[2]];
+        let aU = latestUserLandmarksMirrored[group[0]], bU = latestUserLandmarksMirrored[group[1]], cU = latestUserLandmarksMirrored[group[2]];
         
         if(aT && bT && cT && aU && bU && cU) {
             let angleT = calculateAngle(aT, bT, cT);
@@ -679,13 +680,12 @@ function calculateExamScore(poseIndex) {
             let angleDiff = Math.abs(angleT - angleU);
             
             if (angleDiff > 45) {
-                penalty += 20; // まったく違う（曲げるべき関節が伸びている、棒立ち等）一発アウト級
+                penalty += 20; 
             } else if (angleDiff > 25) {
-                penalty += 8;  // 曲がり具合が全然足りていない
+                penalty += 8;  
             } else if (angleDiff > 12) {
-                penalty += 2;  // あとちょっと！
+                penalty += 2;  
             }
-            // 12度以内のズレは「誤差（人間だもの）」として減点なし！
         }
     });
 
