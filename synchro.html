@@ -77,12 +77,12 @@
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
         .ui-layer { 
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-    pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
-    align-items: center; 
-    justify-content: flex-start; 
-    padding-top: 1vh; /* ⬅️バーの開始位置をここで固定しました */
-}
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; 
+            padding-top: 1vh; /* ⬅️バーの開始位置をここで固定しました */
+        }
         
         #gauge_container { 
             width: 80%; height: 20px; 
@@ -103,24 +103,24 @@
         }
         
         /* 🌟文字の帯（バーの位置に関係なく、絶対位置で固定） */
-#message_text { 
-    position: absolute; 
-    top: 10%; /* 社長の指定位置 */
-    left: 50%; transform: translate(-50%, -50%); 
-    font-size: 35px; 
-    color: #fff; 
-    text-shadow: 0 0 10px #0ff, 3px 3px 0 #000; 
-    font-weight: 900; white-space: pre-wrap; width: 100%; text-align: center;
-    background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.4), transparent);
-    border-top: 2px solid rgba(0, 255, 255, 0.8);
-    border-bottom: 2px solid rgba(0, 255, 255, 0.8);
-    
-    /* 🌟ここを 5px にして細くしました */
-    padding: 5px 0; 
-    
-    box-shadow: 0px 4px 15px rgba(0,0,0,0.6);
-    z-index: 10; 
-}
+        #message_text { 
+            position: absolute; 
+            top: 10%; /* 社長の指定位置 */
+            left: 50%; transform: translate(-50%, -50%); 
+            font-size: 35px; 
+            color: #fff; 
+            text-shadow: 0 0 10px #0ff, 3px 3px 0 #000; 
+            font-weight: 900; white-space: pre-wrap; width: 100%; text-align: center;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.4), transparent);
+            border-top: 2px solid rgba(0, 255, 255, 0.8);
+            border-bottom: 2px solid rgba(0, 255, 255, 0.8);
+            
+            /* 🌟ここを 5px にして細くしました */
+            padding: 5px 0; 
+            
+            box-shadow: 0px 4px 15px rgba(0,0,0,0.6);
+            z-index: 10; 
+        }
         
         .overlay { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
@@ -136,6 +136,14 @@
             text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff;
             letter-spacing: 4px;
             animation: pulse_blue 2s infinite alternate;
+        }
+
+        /* 🌟 名前入力欄のスタイル */
+        #user_name_input {
+            background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; 
+            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; font-size: 24px; 
+            padding: 10px; text-align: center; width: 250px; margin-top: 20px; 
+            outline: none; box-shadow: 0 0 10px rgba(0,255,255,0.3); border-radius: 6px;
         }
 
         .btn { 
@@ -203,6 +211,7 @@
 <div id="start_screen" class="overlay">
     <h1 style="color:#0ff; font-size:40px;">STYLE TRAINING</h1>
     <p id="loading_msg" style="color:#aaa;">起動準備中...</p>
+    <input type="text" id="user_name_input" placeholder="名前を入力" maxlength="10">
     <button class="btn" id="btn_extract" onclick="initApp()">START</button>
     <button class="btn" id="btn_start" onclick="startCamera()" style="display:none;">TRAINING START</button>
 </div>
@@ -227,6 +236,12 @@
 </div>
 
 <script>
+// 🌟 ここにGASのURLを貼り付けてください！
+const GAS_URL = "ここにGASのURLを貼り付けてください";
+
+// 🌟 ユーザー名保存用
+let userName = "";
+
 let pose, camera, canvasCtx, canvas, videoElement;
 let tCanvas, tCtx;
 let fCanvas, fCtx;
@@ -268,7 +283,8 @@ const ANGLE_EVAL_GROUPS = [
 
 let examScores = { down: 0, up: 0 };
 let currentExamPoseIndex = 0; 
-let latestUserLandmarks = null; 
+let latestUserLandmarks = null;         // 描画用（生の座標）
+let latestUserLandmarksMirrored = null; // 採点用（反転した座標）
 
 let audioCtx;
 function playSound(type) {
@@ -302,6 +318,15 @@ function playSound(type) {
 }
 
 async function initApp() {
+    // 🌟 名前が入力されているかチェック
+    let input = document.getElementById('user_name_input').value;
+    if(!input) {
+        alert("名前を入力してください！");
+        return;
+    }
+    userName = input;
+
+    document.getElementById('user_name_input').style.display = 'none';
     document.getElementById('btn_extract').style.display = 'none';
     const msg = document.getElementById('loading_msg');
     msg.innerText = "AIエンジン起動中...";
@@ -798,7 +823,16 @@ function showFinalResult() {
     document.getElementById('clear_text').innerHTML = `TOTAL SCORE<br><span style="font-size:120px; color:#fff; text-shadow:0 0 20px #fff;">${total}</span> / 200 点<br>RANK: <span style="font-size:100px; color:#f0f; text-shadow:0 0 20px #f0f;">${rank}</span>`;
     
     playSound('allclear');
+
+    // 🌟 GASへ送信（名前と合計点のみ）
+    if (GAS_URL !== "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec") {
+        fetch(GAS_URL, {
+            method: "POST",
+            body: JSON.stringify({ name: userName, total: total })
+        }).catch(e => console.error("送信エラー:", e));
+    }
     
+    // ランキング画面を消したため、7秒後にリロード
     setTimeout(() => {
         location.reload();
     }, 7000);
