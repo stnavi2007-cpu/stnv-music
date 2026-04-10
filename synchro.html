@@ -24,30 +24,30 @@
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
-        /* 🌟 ホログラムのレイアウトとグラデーションマスク */
+        /* 🌟修正: サイズを少し落とす(0.95)、右へ移動(5%)、足首を確実に消すグラデーション位置調整 */
         #teacher_canvas {
             position: absolute; 
-            top: 15vh;     /* 少し下に配置 */
-            left: 0;       /* センター配置 */
+            top: 15vh;     
+            left: 5%;      /* 🌟 センターから少し右へ移動 */
             width: 100%; 
             height: 85vh; 
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
-            opacity: 0.75; /* ホログラム感 */
-            transform: scale(1.15); /* 15%大きく */
+            opacity: 0.75; 
+            transform: scale(0.95); /* 🌟 サイズを少し落とす */
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            /* 🌟 足首を消すグラデーション */
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 95%);
+            /* 🌟 グラデーションの開始位置を上げ、確実に足首の境目を消す */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
         }
 
-        /* 最終フェーズの動画（ホログラムキャンバスと同じスタイル） */
+        /* 最終フェーズの動画（上記と同じ修正を適用） */
         #final_video {
             position: absolute; 
             top: 15vh; 
-            left: 0; 
+            left: 5%; 
             width: 100%; 
             height: 85vh; 
             object-fit: contain; 
@@ -55,14 +55,13 @@
             pointer-events: none; 
             display: none;
             opacity: 0.75;
-            transform: scale(1.15);
+            transform: scale(0.95);
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 95%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
         }
 
-        /* 画像や音声は裏で処理するため非表示 */
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
         .ui-layer { 
@@ -74,9 +73,9 @@
         #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 10px; }
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
-        /* 🌟 文字が顔に被らないように配置を調整 */
+        /* 🌟修正: 文字が顔に被らないように、topを25%から12%へ上げて画面上部に配置 */
         #message_text { 
-            position: absolute; top: 25%; left: 50%; transform: translate(-50%, -50%); 
+            position: absolute; top: 12%; left: 50%; transform: translate(-50%, -50%); 
             font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
         }
@@ -296,7 +295,9 @@ function onResults(results) {
         EVAL_INDICES.forEach(i => {
             let lm = results.poseLandmarks[i];
             if (lm) {
-                canvasCtx.beginPath(); canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 10, 0, 2 * Math.PI);
+                canvasCtx.beginPath(); 
+                // 🌟修正: 生徒の点を3倍大きくする (10 -> 30)
+                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 30, 0, 2 * Math.PI);
                 canvasCtx.fillStyle = jointColors[i] || '#ffffff'; canvasCtx.fill();
                 canvasCtx.strokeStyle = '#000'; canvasCtx.lineWidth = 2; canvasCtx.stroke();
             }
