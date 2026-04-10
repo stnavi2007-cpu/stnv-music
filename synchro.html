@@ -9,60 +9,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
-        
-        body { 
-            background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; 
-            margin: 0; overflow: hidden; text-align: center; 
-        }
-        
-        #video_container { 
-            position: relative; width: 100vw; height: 100vh; background: #000; display: none; 
-        }
-        
-        #output_canvas { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; transform: scaleX(-1); z-index: 1; 
-        }
-        
-        #teacher_canvas {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            object-fit: contain; 
-            z-index: 2; 
-            pointer-events: none;
-            opacity: 0.75;
-            filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%);
-        }
-
-        video, audio { 
-            position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none;
-        }
-        
+        body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
+        #video_container { position: relative; width: 100vw; height: 100vh; background: #000; display: none; }
+        #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); z-index: 1; }
+        #teacher_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 2; pointer-events: none; opacity: 0.75; filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%); -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%); mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 14%, rgba(0,0,0,1) 22%, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 95%); }
+        video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: flex-end; }
         .status-box { background: rgba(0, 0, 0, 0.7); border: 2px solid #0ff; padding: 5px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); min-width: 60px; }
-        
         #sync_display { font-size: 25px; color: #0ff; text-shadow: 0 0 7px #0ff; font-weight: bold; }
         #rank_display { font-size: 10px; color: #ff0; }
         #turn_display { position: absolute; top: 10%; left: 50%; transform: translateX(-50%); font-size: 28px; white-space: nowrap; font-weight: bold; text-shadow: 2px 2px 0 #000, 0 0 10px #fff; z-index: 30; }
-        
-        #msg_overlay { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            font-size: 80px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; 
-            white-space: pre-wrap; pointer-events: auto; 
-        }
-
-        .overlay { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); 
-            z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; 
-        }
-        .btn { 
-            padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; 
-            font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; 
-            margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto;
-        }
+        #msg_overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; color: #fff; text-shadow: 0 0 20px #f0f; z-index: 20; white-space: pre-wrap; pointer-events: auto; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .btn { padding: 15px 40px; background: #00bcd4; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto; }
         .btn:active { transform: translate(4px, 4px); box-shadow: 0px 0px 0px 0px #000; }
         h1 { color: #0ff; text-shadow: 4px 4px 0 #000, 0 0 15px #0ff; font-size: 36px; }
     </style>
@@ -209,8 +169,8 @@ function initCamera() {
         
         if(results.poseLandmarks) {
             teacherHistory.push(results.poseLandmarks);
-            if(teacherHistory.length > 3) teacherHistory.shift(); 
-
+            if(teacherHistory.length > 5) teacherHistory.shift(); // タイムラグ吸収用
+            
             teacherMotionWindow.push(results.poseLandmarks);
             if(teacherMotionWindow.length > 15) teacherMotionWindow.shift(); 
         }
@@ -458,7 +418,7 @@ function onUserResults(results) {
     updateScore();
 }
 
-// 鏡合わせ(ミラー)判定のためのフラグを追加
+// ▼▼ ミラー対応の座標正規化 ▼▼
 function getNormalizedJoints(pose, isMirrored = false) {
     if (!pose || !pose[11] || !pose[12] || !pose[23] || !pose[24]) return null;
     
@@ -466,19 +426,18 @@ function getNormalizedJoints(pose, isMirrored = false) {
     let midShoulderY = (pose[11].y + pose[12].y) / 2;
     let midHipX = (pose[23].x + pose[24].x) / 2;
     let midHipY = (pose[23].y + pose[24].y) / 2;
-    
+
     if (isMirrored) {
         midShoulderX = 1.0 - midShoulderX;
         midHipX = 1.0 - midHipX;
     }
 
     let torsoLength = Math.hypot(midShoulderX - midHipX, midShoulderY - midHipY) || 0.1;
-
     let normPose = {};
+
     EVAL_INDICES.forEach(i => {
         let mapI = i;
         if (isMirrored) {
-            // ミラーリング用に関節の左右を反転
             const MIRROR_MAP = {11:12, 12:11, 13:14, 14:13, 15:16, 16:15, 23:24, 24:23, 25:26, 26:25, 27:28, 28:27, 0:0};
             mapI = MIRROR_MAP[i] || i;
         }
@@ -511,138 +470,97 @@ function updateScore() {
     let rawScore = 0;
     let bestPartScores = { arms: 0, legs: 0, body: 0 };
 
-    if (teacherHistory.length > 0 && currentUserLandmarks && currentUserLandmarks.length > 0 && teacherMotionWindow.length > 10 && userMotionWindow.length > 10) {
+    if (teacherHistory.length > 0 && currentUserLandmarks && currentUserLandmarks.length > 0 && userMotionWindow.length > 5) {
         
-        let uNorm = getNormalizedJoints(currentUserLandmarks, true); // 鏡合わせON
-        let uPastNorm = getNormalizedJoints(userMotionWindow[0], true);
-        let tPastNorm = getNormalizedJoints(teacherMotionWindow[0], false);
-        let tCurrForVec = getNormalizedJoints(teacherMotionWindow[teacherMotionWindow.length - 1], false);
-        
-        if (uNorm && uPastNorm && tPastNorm && tCurrForVec) {
-            let jointWeights = {};
-            let tVectors = {};
-            let uVectors = {};
-            let totalWeight = 0;
+        let uNorm = getNormalizedJoints(currentUserLandmarks, true); // 生徒はミラー反転
+        if (!uNorm) return;
 
-            // 全ダンス対応：XY両方の軸で最大動作量を検索
-            let maxTMag = 0;
+        let bestScore = 0;
+        const ARM_INDICES = [11, 12, 13, 14, 15, 16];
+        const LEG_INDICES = [23, 24, 25, 26, 27, 28];
+        const BODY_INDICES = [0, 11, 12, 23, 24];
+
+        // ラグを吸収するための総当たり戦
+        teacherHistory.forEach(pastTeacher => {
+            let tNorm = getNormalizedJoints(pastTeacher, false); // 先生はそのまま
+            if (!tNorm) return;
+
+            let maxMovement = 0;
             EVAL_INDICES.forEach(i => {
-                if (tCurrForVec[i] && tPastNorm[i]) {
-                    let tDx = tCurrForVec[i].x - tPastNorm[i].x;
-                    let tDy = tCurrForVec[i].y - tPastNorm[i].y;
-                    let m = Math.hypot(tDx, tDy);
-                    if (m > maxTMag) maxTMag = m;
+                let prevT = teacherMotionWindow[0];
+                if(prevT && prevT[i]) {
+                    let dx = pastTeacher[i].x - prevT[i].x;
+                    let dy = pastTeacher[i].y - prevT[i].y;
+                    let m = Math.hypot(dx, dy);
+                    if(m > maxMovement) maxMovement = m;
                 }
             });
 
-            // 先生の最大動作の25%以上、かつ最低0.02以上の動きのみを「意図的な動き」とみなす
-            let activeThreshold = Math.max(0.02, maxTMag * 0.25);
+            let activeThreshold = Math.max(0.015, maxMovement * 0.2);
+            let groupTotalWeight = 0;
+            let weightedScoreSum = 0;
 
-            EVAL_INDICES.forEach(i => {
-                if (!tCurrForVec[i] || !tPastNorm[i] || !uNorm[i] || !uPastNorm[i]) {
-                    jointWeights[i] = 0;
-                    return;
-                }
+            let calculateGroupScore = (indices) => {
+                let gSum = 0;
+                let gWeight = 0;
 
-                let tDx = tCurrForVec[i].x - tPastNorm[i].x;
-                let tDy = tCurrForVec[i].y - tPastNorm[i].y;
-                let tMag = Math.hypot(tDx, tDy);
+                indices.forEach(i => {
+                    if (!tNorm[i] || !uNorm[i]) return;
 
-                let uDx = uNorm[i].x - uPastNorm[i].x;
-                let uDy = uNorm[i].y - uPastNorm[i].y;
-                let uMag = Math.hypot(uDx, uDy);
-
-                tVectors[i] = { dx: tDx, dy: tDy, mag: tMag };
-                uVectors[i] = { dx: uDx, dy: uDy, mag: uMag };
-
-                // 動いていない部位のスコア加算を完全に防ぐフィルター
-                let weight = tMag >= activeThreshold ? tMag : 0; 
-                jointWeights[i] = weight;
-                totalWeight += weight;
-            });
-
-            if (totalWeight > 0.01) {
-                let bestScore = 0;
-                
-                const ARM_INDICES = [11, 12, 13, 14, 15, 16];
-                const LEG_INDICES = [23, 24, 25, 26, 27, 28];
-                const BODY_INDICES = [0, 11, 12, 23, 24];
-
-                teacherHistory.forEach(pastTeacher => {
-                    let tNorm = getNormalizedJoints(pastTeacher, false);
-                    if (!tNorm) return;
-
-                    let calculateGroupScore = (indices) => {
-                        let weightedScoreSum = 0;
-                        let groupTotalWeight = 0;
-
-                        indices.forEach(i => {
-                            let weight = jointWeights[i];
-                            if (weight === 0 || !tNorm[i] || !uNorm[i]) return;
-
-                            let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                            let posScore = Math.max(0, 1.0 - (posDiff / 0.5)); 
-
-                            let tMag = tVectors[i].mag;
-                            let uMag = uVectors[i].mag;
-                            let speedDiff = Math.abs(tMag - uMag);
-                            let speedScore = Math.max(0, 1.0 - (speedDiff / Math.max(tMag, 0.1)));
-
-                            let angleScore = 0;
-                            let cosTheta = -1; 
-                            
-                            if (uMag > 0.01 && tMag > 0.01) {
-                                let dotProduct = tVectors[i].dx * uVectors[i].dx + tVectors[i].dy * uVectors[i].dy;
-                                cosTheta = dotProduct / (tMag * uMag);
-                                angleScore = Math.max(0, cosTheta); 
-                            }
-
-                            let movementScore = (speedScore * 0.5) + (angleScore * 0.5);
-                            
-                            // 棒立ちキラー (0.015まで基準を下げて、普通のダンスの動きを救済)
-                            if (uMag < 0.015) { 
-                                movementScore = 0; 
-                                posScore = 0; 
-                            }
-                            
-                            // デタラメ暴れキラー (少し優しくした)
-                            if (cosTheta < 0.2 || posScore < 0.25) {
-                                movementScore = 0;
-                                posScore = 0;
-                            }
-
-                            let jointScore = 100 * posScore * Math.pow(movementScore, 0.7); 
-                            
-                            weightedScoreSum += jointScore * weight;
-                            groupTotalWeight += weight;
-                        });
-
-                        return groupTotalWeight > 0 ? (weightedScoreSum / groupTotalWeight) : 0;
-                    };
-
-                    let armsScore = calculateGroupScore(ARM_INDICES);
-                    let legsScore = calculateGroupScore(LEG_INDICES);
-                    let bodyScore = calculateGroupScore(BODY_INDICES);
-                    let tempOverall = calculateGroupScore(EVAL_INDICES);
-                    
-                    if (tempOverall > bestScore) {
-                        bestScore = tempOverall;
-                        bestPartScores.arms = armsScore;
-                        bestPartScores.legs = legsScore;
-                        bestPartScores.body = bodyScore;
+                    let uPast = getNormalizedJoints(userMotionWindow[0], true);
+                    let uMag = 0;
+                    if(uPast && uPast[i]){
+                        uMag = Math.hypot(uNorm[i].x - uPast[i].x, uNorm[i].y - uPast[i].y);
                     }
+
+                    let prevT = teacherMotionWindow[0];
+                    let tMag = 0;
+                    if(prevT && prevT[i]) {
+                        tMag = Math.hypot(pastTeacher[i].x - prevT[i].x, pastTeacher[i].y - prevT[i].y);
+                    }
+
+                    let weight = tMag >= activeThreshold ? tMag : 0;
+                    if (weight === 0) return; 
+
+                    let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
+                    let posScore = Math.max(0, 1.0 - (posDiff / 0.3));
+
+                    if (uMag < 0.01) {
+                        posScore = 0;
+                    }
+
+                    let jointScore = 100 * posScore;
+                    gSum += jointScore * weight;
+                    gWeight += weight;
+
+                    weightedScoreSum += jointScore * weight;
+                    groupTotalWeight += weight;
                 });
 
-                rawScore = bestScore;
-            }
-        }
+                return gWeight > 0 ? (gSum / gWeight) : 0;
+            };
 
-        if (isStudentTurn) {
-            scoreHistory.push(rawScore);
-            scoreHistoryArms.push(bestPartScores.arms);
-            scoreHistoryLegs.push(bestPartScores.legs);
-            scoreHistoryBody.push(bestPartScores.body);
-        }
+            let tempArms = calculateGroupScore(ARM_INDICES);
+            let tempLegs = calculateGroupScore(LEG_INDICES);
+            let tempBody = calculateGroupScore(BODY_INDICES);
+            let tempOverall = groupTotalWeight > 0 ? (weightedScoreSum / groupTotalWeight) : 0;
+
+            if (tempOverall > bestScore) {
+                bestScore = tempOverall;
+                bestPartScores.arms = tempArms;
+                bestPartScores.legs = tempLegs;
+                bestPartScores.body = tempBody;
+            }
+        });
+
+        rawScore = bestScore;
+    }
+
+    if (isStudentTurn) {
+        scoreHistory.push(rawScore);
+        scoreHistoryArms.push(bestPartScores.arms);
+        scoreHistoryLegs.push(bestPartScores.legs);
+        scoreHistoryBody.push(bestPartScores.body);
     }
 
     if (!isStudentTurn && scoreHistory.length > 0) {
@@ -652,7 +570,7 @@ function updateScore() {
     displayScore += (rawScore - displayScore) * 0.15;
     const stepScore = Math.round(displayScore / 5) * 5;
     document.getElementById('sync_display').innerText = `${stepScore}%`;
-    
+
     let rank = "POOR";
     if (stepScore > 80) rank = "PERFECT!!";
     else if (stepScore > 60) rank = "GREAT!";
