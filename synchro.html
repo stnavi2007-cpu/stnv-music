@@ -14,26 +14,27 @@
         
         #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); z-index: 1; }
         
-        /* 🌟修正: サイズ85%、左-30px、足首から下だけグラデーション、クロマキー描画用キャンバス */
+        /* 🌟修正: ど真ん中(left:0)、下へ移動(top:15vh)、足首消しグラデーション */
         #teacher_canvas {
-            position: absolute; top: 0; left: -30px; width: 100%; height: 100%; 
+            position: absolute; top: 15vh; left: 0; width: 100%; height: 85vh; 
             object-fit: contain; z-index: 2; pointer-events: none;
             opacity: 0.6;
             transform: scale(0.85);
-            transform-origin: center center;
+            transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%); 
-            /* 足首から下（85%以降）だけ透明にするマスク */
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 85%, rgba(0,0,0,0) 100%); 
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 85%, rgba(0,0,0,0) 100%); 
+            /* 足首付近（60%〜90%）で完全に透明にするグラデーション */
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 90%); 
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 60%, rgba(0,0,0,0) 90%); 
         }
 
-        /* 画像や動画は裏で処理するため非表示 */
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 50px; }
+        /* 🌟修正: テキストが顔に被らないように、画面の一番上（padding-top: 10%）に配置 */
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 10%; }
+        
         #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 10px; }
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
-        #message_text { font-size: 36px; color: #fff; text-shadow: 0 0 10px #0ff, 2px 2px 0 #000; font-weight: bold; white-space: pre-wrap; }
+        #message_text { font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; font-weight: bold; white-space: pre-wrap; }
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .btn { padding: 15px 40px; background: #0f0; color: #000; border: 4px solid #fff; font-family: 'DotGothic16'; font-size: 24px; font-weight: bold; cursor: pointer; margin-top: 30px; box-shadow: 4px 4px 0px 0px #000; transition: 0.1s; pointer-events: auto; }
@@ -167,7 +168,6 @@ function onResults(results) {
         } else {
             document.getElementById('loading_msg').innerText = "型の抽出完了！準備OKです。";
             document.getElementById('btn_start').style.display = 'block';
-            // 🌟 抽出が終わったら先生のホログラム描画ループを開始
             processTeacherCanvas();
         }
         return;
@@ -288,7 +288,6 @@ function getNormalizedJoints(poseData) {
     return normPose;
 }
 
-// 🌟 先生の画像・動画をクロマキー合成＆点線描画するループ
 let tempCanvas = document.createElement('canvas');
 let tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -299,14 +298,13 @@ function processTeacherCanvas() {
     let sourceElement = null;
     let poseData = null;
 
-    // 状態に応じて静止画か動画かを切り替え
     if (!isFinalPhase) {
         let targetId = sequence[sequenceIndex];
         sourceElement = document.getElementById(targetImageIds[targetId]);
         poseData = rawTargetPoses[targetId];
     } else {
         sourceElement = document.getElementById('final_video');
-        poseData = null; // 最終フェーズは動画再生のみで骨格は描かない
+        poseData = null; 
     }
 
     if (sourceElement && (sourceElement.videoWidth !== 0 || sourceElement.naturalWidth !== 0)) {
@@ -318,12 +316,10 @@ function processTeacherCanvas() {
             tempCanvas.width = sWidth; tempCanvas.height = sHeight;
         }
 
-        // 一時キャンバスに描画してピクセルデータ取得
         tempCtx.clearRect(0, 0, sWidth, sHeight);
         tempCtx.drawImage(sourceElement, 0, 0, sWidth, sHeight);
         let frame = tempCtx.getImageData(0, 0, sWidth, sHeight);
 
-        // クロマキー処理（緑を抜く）
         for (let i = 0; i < frame.data.length / 4; i++) {
             let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
             let diff = g - Math.max(r, b);
@@ -335,7 +331,6 @@ function processTeacherCanvas() {
         tCtx.clearRect(0, 0, sWidth, sHeight);
         tCtx.putImageData(frame, 0, 0);
 
-        // 🌟 先生の骨格（点線と点）を重ねて描画
         if (poseData && !isFinalPhase) {
             tCtx.save();
             tCtx.setLineDash([10, 10]);
@@ -402,7 +397,7 @@ function startFinalPhase() {
     finalVideo.currentTime = 0;
     finalAudio.currentTime = 0;
     
-    // 🌟 映像をスタートし、0.2秒後に音声を鳴らす（神シンクロ）
+    // 🌟 映像をスタートし、0.2秒後に音声を鳴らす
     finalVideo.play();
     setTimeout(() => {
         finalAudio.play();
