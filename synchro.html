@@ -103,16 +103,16 @@
         /* 🌟 文字の場所を下ろし、サイズを特大化！ */
         #message_text { 
             position: absolute; 
-            top: 22%; /* 11%から22%に下げて見切れを防止 */
+            top: 19%; /* 11%から22%に下げて見切れを防止 */
             left: 50%; transform: translate(-50%, -50%); 
-            font-size: 40px; /* 25pxから40pxへ巨大化 */
+            font-size: 35px; /* 25pxから40pxへ巨大化 */
             color: #fff; 
             text-shadow: 0 0 10px #0ff, 3px 3px 0 #000; 
             font-weight: 900; white-space: pre-wrap; width: 100%; text-align: center;
             background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.4), transparent);
             border-top: 2px solid rgba(0, 255, 255, 0.8); /* 帯も少し太く */
             border-bottom: 2px solid rgba(0, 255, 255, 0.8);
-            padding: 15px 0;
+            padding: 10px 0;
             box-shadow: 0px 4px 15px rgba(0,0,0,0.6);
             z-index: 10; 
         }
@@ -785,9 +785,9 @@ function showFinalResult() {
     
     let total = examScores.down + examScores.up;
     let rank = "C";
-    if (total >= 190) rank = "S";
-    else if (total >= 160) rank = "A";
-    else if (total >= 120) rank = "B";
+    if (total >= 175) rank = "S";
+    else if (total >= 155) rank = "A";
+    else if (total >= 140) rank = "B";
 
     document.getElementById('clear_screen').style.display = 'flex';
     document.getElementById('clear_text').innerHTML = `TOTAL SCORE<br><span style="font-size:120px; color:#fff; text-shadow:0 0 20px #fff;">${total}</span> / 200 点<br>RANK: <span style="font-size:100px; color:#f0f; text-shadow:0 0 20px #f0f;">${rank}</span>`;
