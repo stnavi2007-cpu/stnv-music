@@ -399,7 +399,7 @@ function processTeacherCanvas() {
             if (poseData) {
                 tCtx.save();
                 tCtx.setLineDash([10, 10]);
-                tCtx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+                tCtx.strokeStyle = 'rgba(0, 0, 255, 0.8)';
                 tCtx.lineWidth = 6;
                 CUSTOM_CONNECTIONS.forEach(([i, j]) => {
                     if (poseData[i] && poseData[j]) {
@@ -410,7 +410,7 @@ function processTeacherCanvas() {
                     }
                 });
                 tCtx.setLineDash([]);
-                tCtx.fillStyle = '#00ffff';
+                tCtx.fillStyle = '#0000ff';
                 EVAL_INDICES.forEach(i => {
                     if (poseData[i]) {
                         tCtx.beginPath();
