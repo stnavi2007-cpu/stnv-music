@@ -24,26 +24,26 @@
             object-fit: contain; transform: scaleX(-1); z-index: 1; 
         }
         
-        /* 🌟修正: サイズを少し落とす(0.95)、右へ移動(5%)、足首を確実に消すグラデーション位置調整 */
+        /* 🌟修正: clip-pathを使って画像の不要な黒枠（端）を切り落とす */
         #teacher_canvas {
             position: absolute; 
             top: 15vh;     
-            left: 5%;      /* 🌟 センターから少し右へ移動 */
+            left: 5%;      
             width: 100%; 
             height: 85vh; 
             object-fit: contain; 
             z-index: 2; 
             pointer-events: none;
             opacity: 0.75; 
-            transform: scale(0.95); /* 🌟 サイズを少し落とす */
+            transform: scale(0.95); 
             transform-origin: center bottom;
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
-            /* 🌟 グラデーションの開始位置を上げ、確実に足首の境目を消す */
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            /* 上、左、右の端2%を削り落として黒枠を消す */
+            clip-path: inset(2% 2% 0 2%); 
         }
 
-        /* 最終フェーズの動画（上記と同じ修正を適用） */
         #final_video {
             position: absolute; 
             top: 15vh; 
@@ -60,22 +60,23 @@
             filter: drop-shadow(0 0 15px #0ff) sepia(1) hue-rotate(180deg) saturate(300%);
             -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
             mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 85%);
+            clip-path: inset(2% 2% 0 2%);
         }
 
         img, video, audio { position: absolute; width: 1px; height: 1px; opacity: 0.01; z-index: -10; pointer-events: none; }
         
+        /* 🌟修正: padding-topを調整し、要素が上から順番に並ぶようにする */
         .ui-layer { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             pointer-events: none; z-index: 10; display: flex; flex-direction: column; 
-            align-items: center; justify-content: flex-start; padding-top: 50px; 
+            align-items: center; justify-content: flex-start; padding-top: 10vh; 
         }
         
-        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 10px; }
+        #gauge_container { width: 80%; height: 30px; border: 3px solid #fff; background: rgba(0,0,0,0.5); border-radius: 15px; overflow: hidden; box-shadow: 0 0 10px #0ff; display: none; margin-bottom: 15px; }
         #gauge_fill { width: 0%; height: 100%; background: #0f0; transition: width 0.1s linear; }
         
-        /* 🌟修正: 文字が顔に被らないように、topを25%から12%へ上げて画面上部に配置 */
+        /* 🌟修正: 絶対配置(position: absolute)をやめ、メーターの下に自然に配置されるようにした */
         #message_text { 
-            position: absolute; top: 12%; left: 50%; transform: translate(-50%, -50%); 
             font-size: 40px; color: #fff; text-shadow: 0 0 15px #0ff, 3px 3px 0 #000; 
             font-weight: bold; white-space: pre-wrap; width: 100%; text-align: center;
         }
@@ -130,20 +131,20 @@ let isExtractingTarget = true;
 let isCleared = false;
 let isFinalPhase = false; 
 
-// クエスト管理
-const targetImageIds = ['img_pose_0', 'img_pose_1']; 
-const poseNames = ['DOWNの形', 'UPの形']; 
+// 🌟修正: 配列の順番とテキストを入れ替え（UPの形からスタート）
+const targetImageIds = ['img_pose_1', 'img_pose_0']; 
+const poseNames = ['UPの形', 'DOWNの形']; 
 const sequence = [0, 1, 0, 1, 0, 1, 0, 1]; 
 let sequenceIndex = 0;
 let extractIndex = 0;
 
 let holdStartTime = null;
-const HOLD_DURATION_MS = 3000; 
+// 🌟修正: 静止時間を2秒に変更
+const HOLD_DURATION_MS = 2000; 
 
-// 🌟 設定：4エイトで終了、点のサイズ
 const BPM = 100;
 const SHADOW_DURATION_MS = (60 / BPM) * 32 * 1000; // 約19.2秒
-const TEACHER_POINT_RADIUS = 8; // 点のサイズ倍
+const TEACHER_POINT_RADIUS = 8; 
 
 const EVAL_INDICES = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
 const CUSTOM_CONNECTIONS = [
@@ -153,7 +154,6 @@ const CUSTOM_CONNECTIONS = [
   [23, 25], [25, 27], [24, 26], [26, 28]
 ];
 
-// 音声設定
 let audioCtx;
 function playSound(type) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -177,7 +177,6 @@ function playSound(type) {
     }
 }
 
-// 初期化（AIでポーズ抽出開始）
 function initApp() {
     document.getElementById('btn_extract').style.display = 'none';
     const msg = document.getElementById('loading_msg');
@@ -207,7 +206,6 @@ function processNextImage() {
 }
 
 function onResults(results) {
-    // 【起動時】画像のポーズを抽出
     if (isExtractingTarget) {
         if (results.poseLandmarks) {
             targetPoses.push(getNormalizedJoints(results.poseLandmarks));
@@ -225,13 +223,11 @@ function onResults(results) {
         } else {
             document.getElementById('loading_msg').innerText = "型の抽出完了！準備OKです。";
             document.getElementById('btn_start').style.display = 'block';
-            // 🌟 抽出完了後、ホログラム描画ループを開始
             processTeacherCanvas();
         }
         return;
     }
 
-    // 【トレーニング中】生徒のカメラ映像の処理
     if (canvas.width !== results.image.width) {
         canvas.width = results.image.width; canvas.height = results.image.height;
     }
@@ -240,7 +236,6 @@ function onResults(results) {
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
     canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-    // 最終フェーズ（シャドーイング）は生徒の骨格のみ描画して終了
     if (isFinalPhase) {
         if (results.poseLandmarks) {
             CUSTOM_CONNECTIONS.forEach(([i, j]) => {
@@ -255,7 +250,6 @@ function onResults(results) {
         return;
     }
 
-    // 通常フェーズの判定処理
     let targetId = sequence[sequenceIndex];
     let targetNormalized = targetPoses[targetId];
 
@@ -278,8 +272,9 @@ function onResults(results) {
             let dist = Math.hypot(targetNormalized[i].x - userNorm[i].x, targetNormalized[i].y - userNorm[i].y);
 
             let color = '#ff0000'; 
-            if (dist < 0.20) { color = '#00ff00'; } 
-            else if (dist < 0.40) { color = '#ffff00'; allPerfect = false; } 
+            /* 🌟修正: 判定を少しだけ緩くしました (0.20 -> 0.25, 0.40 -> 0.45) */
+            if (dist < 0.25) { color = '#00ff00'; } 
+            else if (dist < 0.45) { color = '#ffff00'; allPerfect = false; } 
             else { allPerfect = false; }
             jointColors[i] = color;
         });
@@ -296,8 +291,8 @@ function onResults(results) {
             let lm = results.poseLandmarks[i];
             if (lm) {
                 canvasCtx.beginPath(); 
-                // 🌟修正: 生徒の点を3倍大きくする (10 -> 30)
-                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 30, 0, 2 * Math.PI);
+                /* 🌟修正: 生徒の点の大きさを半分に (15 -> 8程度) */
+                canvasCtx.arc(lm.x * canvas.width, lm.y * canvas.height, 8, 0, 2 * Math.PI);
                 canvasCtx.fillStyle = jointColors[i] || '#ffffff'; canvasCtx.fill();
                 canvasCtx.strokeStyle = '#000'; canvasCtx.lineWidth = 2; canvasCtx.stroke();
             }
@@ -351,11 +346,9 @@ function getNormalizedJoints(poseData) {
     return normPose;
 }
 
-// 🌟 クロマキー処理用の一時キャンバス
 let tempCanvas = document.createElement('canvas');
 let tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
 
-// 🌟 先生の画像・動画をクロマキー合成＆点線描画するループ
 function processTeacherCanvas() {
     requestAnimationFrame(processTeacherCanvas);
     if (isExtractingTarget) return;
@@ -368,7 +361,6 @@ function processTeacherCanvas() {
         sourceElement = document.getElementById(targetImageIds[targetId]);
         poseData = rawTargetPoses[targetId];
     } else {
-        // 最終フェーズは別で動画を描画するためここでは処理しない
         return; 
     }
 
@@ -381,16 +373,14 @@ function processTeacherCanvas() {
             tempCanvas.width = sWidth; tempCanvas.height = sHeight;
         }
 
-        // 一時キャンバスに描画してピクセルデータ取得
         tempCtx.clearRect(0, 0, sWidth, sHeight);
         tempCtx.drawImage(sourceElement, 0, 0, sWidth, sHeight);
         let frame = tempCtx.getImageData(0, 0, sWidth, sHeight);
 
-        // クロマキー処理（緑を抜く）
         for (let i = 0; i < frame.data.length / 4; i++) {
             let r = frame.data[i * 4], g = frame.data[i * 4 + 1], b = frame.data[i * 4 + 2];
             let diff = g - Math.max(r, b);
-            if (diff > 25) { // 閾値を調整して枠を消しやすくする
+            if (diff > 25) { 
                 frame.data[i * 4 + 3] = 0; 
             }
         }
@@ -398,7 +388,6 @@ function processTeacherCanvas() {
         tCtx.clearRect(0, 0, sWidth, sHeight);
         tCtx.putImageData(frame, 0, 0);
 
-        // 🌟 先生の骨格（点線と点）を重ねて描画
         if (poseData && !isFinalPhase) {
             tCtx.save();
             tCtx.setLineDash([10, 10]);
@@ -417,7 +406,6 @@ function processTeacherCanvas() {
             EVAL_INDICES.forEach(i => {
                 if (poseData[i]) {
                     tCtx.beginPath();
-                    // 🌟 点のサイズを倍（8）
                     tCtx.arc(poseData[i].x * sWidth, poseData[i].y * sHeight, TEACHER_POINT_RADIUS, 0, 2*Math.PI);
                     tCtx.fill();
                 }
@@ -452,7 +440,6 @@ function nextPose() {
     document.getElementById('message_text').innerText = `${poseNames[targetId]}`;
 }
 
-// 🌟 最終シャドーイングフェーズ
 function startFinalPhase() {
     isFinalPhase = true;
     isCleared = false;
@@ -467,17 +454,15 @@ function startFinalPhase() {
     let finalVideo = document.getElementById('final_video');
     let finalAudio = document.getElementById('final_audio');
     
-    tCanvas.style.display = 'none'; // 静止画キャンバスを隠す
-    finalVideo.style.display = 'block'; // 最終動画を表示
+    tCanvas.style.display = 'none'; 
+    finalVideo.style.display = 'block'; 
     
     finalVideo.currentTime = 0;
     finalAudio.currentTime = 0;
     
-    // 動画と音声をスタート
     finalVideo.play();
     finalAudio.play();
 
-    // 🌟 4エイト(19.2秒)で終了し、画面リロード
     setTimeout(() => {
         finalVideo.pause();
         finalAudio.pause();
