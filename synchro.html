@@ -103,7 +103,6 @@ let scoreHistoryArms = [];
 let scoreHistoryLegs = [];
 let scoreHistoryBody = [];
 
-// ラグ吸収・ベクトル計算用のバッファ（20フレーム = 約0.6秒分）
 let teacherHistory = []; 
 let userMotionWindow = []; 
 
@@ -178,7 +177,6 @@ function initCamera() {
         
         if(results.poseLandmarks) {
             teacherHistory.push(results.poseLandmarks);
-            // タイムラグ吸収のためバッファを20フレームに拡大
             if(teacherHistory.length > 20) teacherHistory.shift(); 
         }
     });
@@ -417,7 +415,7 @@ function onUserResults(results) {
     
     if (currentUserLandmarks) {
         userMotionWindow.push(currentUserLandmarks);
-        if(userMotionWindow.length > 20) userMotionWindow.shift(); // ユーザー側バッファも拡大
+        if(userMotionWindow.length > 20) userMotionWindow.shift();
 
         let filteredLandmarks = filterEssentialLandmarks(currentUserLandmarks);
         drawConnectors(canvasCtx, filteredLandmarks, CUSTOM_CONNECTIONS, {color: '#00ff00', lineWidth: 4});
@@ -478,7 +476,7 @@ function updateScore() {
     
     let rawScore = -1; 
     let bestPartScores = { arms: 0, legs: 0, body: 0 };
-    const V_LAG = 4; // ベクトル計算用の過去フレーム差分間隔
+    const V_LAG = 4;
 
     if (teacherHistory.length > V_LAG && userMotionWindow.length > V_LAG) {
         
@@ -491,7 +489,6 @@ function updateScore() {
         const LEG_INDICES = [23, 24, 25, 26, 27, 28];
         const BODY_INDICES = [0, 11, 12, 23, 24];
 
-        // 動的ノイズゲートの算出（先生がどれくらい動いているか）
         let globalMaxMovement = 0;
         for (let j = V_LAG; j < teacherHistory.length; j++) {
             let tN = getNormalizedJoints(teacherHistory[j], false);
@@ -507,7 +504,6 @@ function updateScore() {
         }
         let activeThreshold = Math.max(0.015, globalMaxMovement * 0.15);
 
-        // ラグを完全に吸収するため、過去0.6秒間の先生の動作履歴を総当たりで確認し、一番一致する瞬間を探す
         for (let j = V_LAG; j < teacherHistory.length; j++) {
             let tNorm = getNormalizedJoints(teacherHistory[j], false);
             let tPast = getNormalizedJoints(teacherHistory[j - V_LAG], false);
@@ -528,45 +524,43 @@ function updateScore() {
                     let tLen = Math.hypot(tx, ty);
                     let uLen = Math.hypot(ux, uy);
 
-                    // 位置座標の一致度
+                    // 【修正点①】座標ズレの許容幅を2倍(0.8)に緩和。骨格の形やカメラの歪みによる理不尽な減点を防ぐ
                     let posDiff = Math.hypot(tNorm[i].x - uNorm[i].x, tNorm[i].y - uNorm[i].y);
-                    let posScore = Math.max(0, 1.0 - (posDiff / 0.4));
+                    let posScore = Math.max(0, 1.0 - (posDiff / 0.8));
 
                     if (tLen < activeThreshold) {
-                        // 【完全静止の除外ルール】先生が意図的に止めている部位は採点対象から外す
                         if (uLen > 0.05) {
-                            // ただし、先生が完全に止まっているのに、生徒がデタラメに暴れている場合のみ0点として減点対象にする
                             sum += 0;
                             weightTotal += uLen; 
                         }
                         return; 
                     }
 
-                    // 先生が動いている部位のみスコア計算
                     let weight = tLen;
                     let motionScore = 0;
 
-                    if (uLen <= 0.01) {
-                        // 棒立ちキラー：生徒が動いていない
+                    if (uLen <= 0.015) {
+                        // 棒立ち
                         motionScore = 0;
                     } else {
-                        // 進行方向の類似度（内積）
                         let dot = (tx * ux) + (ty * uy);
                         let cosTheta = Math.max(-1, Math.min(1, dot / (tLen * uLen)));
 
                         if (cosTheta > 0) {
+                            // 【修正点②】スピードの完全一致を撤廃。先生の30%以上動いていれば「同じように動いた」とみなし満点
+                            let speedScore = (uLen > tLen * 0.3) ? 1.0 : (uLen / (tLen * 0.3));
                             let angleScore = cosTheta; 
-                            let speedScore = Math.min(tLen, uLen) / Math.max(tLen, uLen); 
-                            motionScore = (angleScore * 0.6) + (speedScore * 0.4);
+                            motionScore = (angleScore * 0.7) + (speedScore * 0.3);
                         } else {
-                            // 逆方向キラー
                             motionScore = 0; 
                         }
                     }
 
-                    // 座標40% ＋ 動きのベクトル（方向とスピード）60% で評価
-                    let finalScore = (posScore * 0.4) + (motionScore * 0.6);
-                    sum += (finalScore * 100) * weight;
+                    // 【修正点③】ゲーム的補正。80%以上の数学的再現度があれば、システム上は100%として扱う
+                    let rawJointScore = (posScore * 0.3) + (motionScore * 0.7);
+                    let finalJointScore = Math.min(1.0, rawJointScore * 1.25); 
+
+                    sum += (finalJointScore * 100) * weight;
                     weightTotal += weight;
                 });
 
@@ -582,7 +576,6 @@ function updateScore() {
 
             if (totalWeight > 0) {
                 let tempOverall = totalSum / totalWeight;
-                // 一番スコアが高くなる瞬間（＝生徒の動きと先生の動きが一番シンクロした瞬間）を採用
                 if (tempOverall > bestOverallScore) {
                     bestOverallScore = tempOverall;
                     bestPartScores.arms = armsObj.weightTotal > 0 ? armsObj.sum / armsObj.weightTotal : 0;
@@ -597,7 +590,6 @@ function updateScore() {
         }
     }
 
-    // 両者が完全に止まっていて評価できないフレームは直前のスコアを維持する
     if (rawScore === -1 && scoreHistory.length > 0) {
         rawScore = scoreHistory[scoreHistory.length - 1];
     } else if (rawScore === -1) {
