@@ -12,7 +12,8 @@
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        /* ★修正箇所: coverからcontainへ変更（広角・元のサイズで表示） */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
@@ -98,22 +99,8 @@ let ngTimeStart = null;
 let countdownVal = 3;
 let countdownTimer = null;
 let mediaRecorder, recordedChunks = [];
-let voiceLocked = false;
 let playId = "";
 let playPass = "";
-
-let lastWarnTime = 0; 
-
-function speak(text) {
-    if (voiceLocked) return;
-    window.speechSynthesis.cancel(); 
-    
-    const uttr = new SpeechSynthesisUtterance(text);
-    uttr.lang = "ja-JP";
-    uttr.rate = 1.2;
-    uttr.volume = 0.4;
-    window.speechSynthesis.speak(uttr);
-}
 
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
@@ -123,10 +110,6 @@ function loginAndStart() {
         alert("IDとパスワードを入れてくれ！");
         return;
     }
-
-    const unlockUttr = new SpeechSynthesisUtterance("");
-    unlockUttr.volume = 0;
-    window.speechSynthesis.speak(unlockUttr);
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -171,19 +154,39 @@ function onResults(results) {
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
     if (results.poseLandmarks) {
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
-        processGame(results.poseLandmarks);
+        const lm = results.poseLandmarks;
+        const shoulder = { x: (lm[11].x + lm[12].x)/2, y: (lm[11].y + lm[12].y)/2 };
+        const hip = { x: (lm[23].x + lm[24].x)/2, y: (lm[23].y + lm[24].y)/2 };
+        const knee = { x: (lm[25].x + lm[26].x)/2, y: (lm[25].y + lm[26].y)/2 };
+        const ankle = { x: (lm[27].x + lm[28].x)/2, y: (lm[27].y + lm[28].y)/2 };
+        
+        const w = canvasElement.width;
+        const h = canvasElement.height;
+
+        // ★修正箇所: 肩・腰・膝・踵の4点と、それを繋ぐ線だけを描画
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(shoulder.x * w, shoulder.y * h);
+        canvasCtx.lineTo(hip.x * w, hip.y * h);
+        canvasCtx.lineTo(knee.x * w, knee.y * h);
+        canvasCtx.lineTo(ankle.x * w, ankle.y * h);
+        canvasCtx.strokeStyle = '#00FF00';
+        canvasCtx.lineWidth = 4;
+        canvasCtx.stroke();
+
+        const points = [shoulder, hip, knee, ankle];
+        canvasCtx.fillStyle = '#FF0000';
+        for(let p of points) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(p.x * w, p.y * h, 6, 0, 2 * Math.PI);
+            canvasCtx.fill();
+        }
+
+        processGame(shoulder, hip, knee, ankle);
     }
     canvasCtx.restore();
 }
 
-function processGame(landmarks) {
-    const shoulder = { x: (landmarks[11].x + landmarks[12].x)/2, y: (landmarks[11].y + landmarks[12].y)/2 };
-    const hip = { x: (landmarks[23].x + landmarks[24].x)/2, y: (landmarks[23].y + landmarks[24].y)/2 };
-    const knee = { x: (landmarks[25].x + landmarks[26].x)/2, y: (landmarks[25].y + landmarks[26].y)/2 };
-    const ankle = { x: (landmarks[27].x + landmarks[28].x)/2, y: (landmarks[27].y + landmarks[28].y)/2 };
-    
+function processGame(shoulder, hip, knee, ankle) {
     const hipAngle = calculateAngle(shoulder, hip, knee);
     const kneeAngle = calculateAngle(hip, knee, ankle);
     const isKneeFloating = knee.y < ankle.y + 0.05; 
@@ -194,7 +197,6 @@ function processGame(landmarks) {
     const debugMsg = document.getElementById('debug_msg');
     if (!isGoodPose) {
         // ★ 改善1: 腰が高いか低いかをY座標で判定して的確にアドバイス
-        // (腰のY座標が、肩と膝の中間より上なら上がりすぎ、下なら落ちすぎ)
         const hipExpectedY = shoulder.y + (knee.y - shoulder.y) * 0.4;
         if (hipAngle < 160) {
             if (hip.y < hipExpectedY) debugMsg.innerText = "❌ 腰が上がりすぎている！(お尻を下げろ！)";
@@ -226,13 +228,11 @@ function startCountdown() {
     countdownVal = 3;
     const msg = document.getElementById('msg_area');
     msg.className = "msg-countdown";
-    speak("姿勢OK。開始します。3");
     
     countdownTimer = setInterval(() => {
         countdownVal--;
         if (countdownVal > 0) {
             msg.innerText = countdownVal;
-            speak(countdownVal);
         } else {
             clearInterval(countdownTimer);
             beginBattle();
@@ -243,13 +243,11 @@ function startCountdown() {
 function cancelCountdown() {
     clearInterval(countdownTimer);
     state = "SETUP";
-    speak("崩れました。");
 }
 
 function beginBattle() {
     state = "BATTLE";
     holdTime = 0;
-    speak("スタート！！");
     document.getElementById('msg_area').innerText = "KEEP IT!!";
     
     try {
@@ -301,11 +299,6 @@ function updateBattle(isGoodPose) {
         msg.className = "msg-ng";
         if (!ngTimeStart) {
             ngTimeStart = Date.now();
-            
-            if (Date.now() - lastWarnTime > 3000) {
-                speak("姿勢を戻せ！");
-                lastWarnTime = Date.now();
-            }
         }
         
         let elapsed = (Date.now() - ngTimeStart) / 1000;
@@ -320,7 +313,6 @@ function updateBattle(isGoodPose) {
 function finishGame() {
     if (state === "FINISHED") return;
     state = "FINISHED";
-    speak("終了！");
     
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     
