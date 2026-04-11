@@ -12,7 +12,7 @@
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; }
-        /* ★修正箇所: coverからcontainへ変更（広角・元のサイズで表示） */
+        /* ★広角サイズをそのまま維持する contain */
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
@@ -102,6 +102,9 @@ let mediaRecorder, recordedChunks = [];
 let playId = "";
 let playPass = "";
 
+// ★点の振動（ジッター）を落ち着かせるためのフィルター用変数
+let smoothedLandmarks = {};
+
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
@@ -145,7 +148,24 @@ function calculateAngle(a, b, c) {
     return angle;
 }
 
+// ★点の振動を抑えるフィルター関数
+function smoothPoint(id, point, alpha = 0.15) {
+    if (!smoothedLandmarks[id]) {
+        smoothedLandmarks[id] = { x: point.x, y: point.y };
+    } else {
+        smoothedLandmarks[id].x = smoothedLandmarks[id].x * (1 - alpha) + point.x * alpha;
+        smoothedLandmarks[id].y = smoothedLandmarks[id].y * (1 - alpha) + point.y * alpha;
+    }
+    return smoothedLandmarks[id];
+}
+
 function onResults(results) {
+    // ★カメラの広角サイズに合わせてキャンバスをピタッと同期させる
+    if (canvasElement.width !== results.image.width) {
+        canvasElement.width = results.image.width;
+        canvasElement.height = results.image.height;
+    }
+
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
@@ -155,57 +175,87 @@ function onResults(results) {
     
     if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
-        const shoulder = { x: (lm[11].x + lm[12].x)/2, y: (lm[11].y + lm[12].y)/2 };
-        const hip = { x: (lm[23].x + lm[24].x)/2, y: (lm[23].y + lm[24].y)/2 };
-        const knee = { x: (lm[25].x + lm[26].x)/2, y: (lm[25].y + lm[26].y)/2 };
-        const ankle = { x: (lm[27].x + lm[28].x)/2, y: (lm[27].y + lm[28].y)/2 };
+        const rawShoulder = { x: (lm[11].x + lm[12].x)/2, y: (lm[11].y + lm[12].y)/2 };
+        const rawHip = { x: (lm[23].x + lm[24].x)/2, y: (lm[23].y + lm[24].y)/2 };
+        const rawKnee = { x: (lm[25].x + lm[26].x)/2, y: (lm[25].y + lm[26].y)/2 };
+        const rawAnkle = { x: (lm[27].x + lm[28].x)/2, y: (lm[27].y + lm[28].y)/2 };
         
+        // ★フィルターを通して点を落ち着かせる
+        const shoulder = smoothPoint('shoulder', rawShoulder);
+        const hip = smoothPoint('hip', rawHip);
+        const knee = smoothPoint('knee', rawKnee);
+        const ankle = smoothPoint('ankle', rawAnkle);
+
+        const hipAngle = calculateAngle(shoulder, hip, knee);
+        const kneeAngle = calculateAngle(hip, knee, ankle);
+
+        // ★うつ伏せ判定（肩から踵にかけての高さの差が少なすぎる場合は寝ていると判定）
+        const bodySlopeY = ankle.y - shoulder.y;
+        const isLyingDown = bodySlopeY < 0.10;
+
+        // ★色分け判定
+        let hipColor = '#00FFFF'; // 青
+        if (hipAngle < 155) hipColor = '#FF0000'; // 赤
+        else if (hipAngle < 165) hipColor = '#FFFF00'; // 黄
+
+        let kneeColor = '#00FFFF'; // 青
+        if (kneeAngle < 155) kneeColor = '#FF0000'; // 赤
+        else if (kneeAngle < 165) kneeColor = '#FFFF00'; // 黄
+
+        // 寝ていたら強制的に真っ赤
+        if (isLyingDown) {
+            hipColor = '#FF0000';
+            kneeColor = '#FF0000';
+        }
+
         const w = canvasElement.width;
         const h = canvasElement.height;
 
-        // ★修正箇所: 肩・腰・膝・踵の4点と、それを繋ぐ線だけを描画
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(shoulder.x * w, shoulder.y * h);
-        canvasCtx.lineTo(hip.x * w, hip.y * h);
-        canvasCtx.lineTo(knee.x * w, knee.y * h);
-        canvasCtx.lineTo(ankle.x * w, ankle.y * h);
-        canvasCtx.strokeStyle = '#00FF00';
+        // ★線を描画
         canvasCtx.lineWidth = 4;
-        canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x * w, shoulder.y * h); canvasCtx.lineTo(hip.x * w, hip.y * h); canvasCtx.strokeStyle = hipColor; canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(hip.x * w, hip.y * h); canvasCtx.lineTo(knee.x * w, knee.y * h); canvasCtx.strokeStyle = kneeColor; canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(knee.x * w, knee.y * h); canvasCtx.lineTo(ankle.x * w, ankle.y * h); canvasCtx.strokeStyle = kneeColor; canvasCtx.stroke();
 
-        const points = [shoulder, hip, knee, ankle];
-        canvasCtx.fillStyle = '#FF0000';
-        for(let p of points) {
+        // ★4つの点だけを描画 (サイズは半分の3に)
+        const points = [
+            {p: shoulder, c: isLyingDown ? '#FF0000' : '#00FFFF'},
+            {p: hip, c: hipColor},
+            {p: knee, c: kneeColor},
+            {p: ankle, c: kneeColor}
+        ];
+        for(let pt of points) {
+            canvasCtx.fillStyle = pt.c;
             canvasCtx.beginPath();
-            canvasCtx.arc(p.x * w, p.y * h, 6, 0, 2 * Math.PI);
+            canvasCtx.arc(pt.p.x * w, pt.p.y * h, 3, 0, 2 * Math.PI); // サイズ3！
             canvasCtx.fill();
         }
 
-        processGame(shoulder, hip, knee, ankle);
+        processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown);
     }
     canvasCtx.restore();
 }
 
-function processGame(shoulder, hip, knee, ankle) {
-    const hipAngle = calculateAngle(shoulder, hip, knee);
-    const kneeAngle = calculateAngle(hip, knee, ankle);
-    const isKneeFloating = knee.y < ankle.y + 0.05; 
-
-    // ★ 改善1: 角度判定を厳格化（160度以上をキープ）
-    const isGoodPose = (hipAngle >= 160 && kneeAngle >= 160 && isKneeFloating);
+function processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown) {
+    // 155度以上（青か黄）ならタイマーが進む。155未満（赤）か、寝ていたらNG。
+    const isGoodPose = (!isLyingDown && hipAngle >= 155 && kneeAngle >= 155);
 
     const debugMsg = document.getElementById('debug_msg');
-    if (!isGoodPose) {
-        // ★ 改善1: 腰が高いか低いかをY座標で判定して的確にアドバイス
+    
+    if (isLyingDown) {
+        debugMsg.innerText = "❌ うつ伏せだ！肩を上げて踵まで一直線にしろ！";
+    } else if (!isGoodPose) {
         const hipExpectedY = shoulder.y + (knee.y - shoulder.y) * 0.4;
-        if (hipAngle < 160) {
-            if (hip.y < hipExpectedY) debugMsg.innerText = "❌ 腰が上がりすぎている！(お尻を下げろ！)";
-            else debugMsg.innerText = "❌ 腰が落ちている！(お尻を上げろ！)";
+        if (hipAngle < 155) {
+            if (hip.y < hipExpectedY) debugMsg.innerText = "❌ 腰が上がりすぎている！(赤色: お尻を下げろ！)";
+            else debugMsg.innerText = "❌ 腰が落ちている！(赤色: お尻を上げろ！)";
+        } else if (kneeAngle < 155) {
+            debugMsg.innerText = "❌ 膝が曲がっている！(赤色: 膝を伸ばせ！)";
         }
-        else if (kneeAngle < 160) debugMsg.innerText = "❌ 膝が曲がっている！(膝を伸ばせ！)";
-        else if (!isKneeFloating) debugMsg.innerText = "❌ 膝が床についている！";
+    } else if (hipAngle < 165 || kneeAngle < 165) {
+        debugMsg.innerText = "⚠️ もう少しで完璧！体を一直線に保て！(黄色)";
     } else {
-        debugMsg.innerText = "✅ 完璧なフォーム！";
+        debugMsg.innerText = "✅ 完璧なフォーム！(青色)";
     }
 
     const msg = document.getElementById('msg_area');
@@ -228,6 +278,7 @@ function startCountdown() {
     countdownVal = 3;
     const msg = document.getElementById('msg_area');
     msg.className = "msg-countdown";
+    msg.innerText = countdownVal;
     
     countdownTimer = setInterval(() => {
         countdownVal--;
@@ -252,7 +303,6 @@ function beginBattle() {
     
     try {
         const stream = canvasElement.captureStream(30);
-        // ★ 改善3: iOS Safari向けに最適な動画フォーマットを自動判定
         let options = {};
         if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
             options = { mimeType: 'video/webm;codecs=vp9' };
@@ -282,7 +332,6 @@ function updateBattle(isGoodPose) {
             ngLabel.style.display = "none";
             ngCount.innerText = "";
         }
-        // ★ 改善2: 良い姿勢の時だけタイマーが進み、黄色く光る
         holdTime += 0.033;
         timerDisplay.innerText = holdTime.toFixed(2);
         timerDisplay.style.color = "#ff0"; 
@@ -291,7 +340,6 @@ function updateBattle(isGoodPose) {
         msg.innerText = "GOOD POSE!! 🔥";
         msg.className = "msg-ok";
     } else {
-        // ★ 改善2: 悪い姿勢の時はタイマーが赤くなり、ピタッと止まる（ズル防止）
         timerDisplay.style.color = "#f00"; 
         timerDisplay.style.textShadow = "0 0 10px #f00";
 
@@ -335,7 +383,6 @@ function finishGame() {
 }
 
 function saveVideo() {
-    // ★ 改善3: 保存時の拡張子を自動で最適化
     const mimeType = mediaRecorder.mimeType || 'video/webm';
     const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
     const blob = new Blob(recordedChunks, { type: mimeType });
