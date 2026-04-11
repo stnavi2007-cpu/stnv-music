@@ -12,7 +12,6 @@
         body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; }
-        /* ★広角サイズをそのまま維持する contain */
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
         video { display: none; }
         
@@ -102,7 +101,6 @@ let mediaRecorder, recordedChunks = [];
 let playId = "";
 let playPass = "";
 
-// ★点の振動（ジッター）を落ち着かせるためのフィルター用変数
 let smoothedLandmarks = {};
 
 function loginAndStart() {
@@ -148,7 +146,6 @@ function calculateAngle(a, b, c) {
     return angle;
 }
 
-// ★点の振動を抑えるフィルター関数
 function smoothPoint(id, point, alpha = 0.15) {
     if (!smoothedLandmarks[id]) {
         smoothedLandmarks[id] = { x: point.x, y: point.y };
@@ -160,7 +157,6 @@ function smoothPoint(id, point, alpha = 0.15) {
 }
 
 function onResults(results) {
-    // ★カメラの広角サイズに合わせてキャンバスをピタッと同期させる
     if (canvasElement.width !== results.image.width) {
         canvasElement.width = results.image.width;
         canvasElement.height = results.image.height;
@@ -175,13 +171,19 @@ function onResults(results) {
     
     if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
+        
+        // 🌟 5点すべてがカメラに映っているか監視
+        const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
+        const visOK = getV(11,12) > 0.5 && getV(13,14) > 0.5 && getV(23,24) > 0.5 && getV(25,26) > 0.5 && getV(27,28) > 0.5;
+
         const rawShoulder = { x: (lm[11].x + lm[12].x)/2, y: (lm[11].y + lm[12].y)/2 };
+        const rawElbow = { x: (lm[13].x + lm[14].x)/2, y: (lm[13].y + lm[14].y)/2 };
         const rawHip = { x: (lm[23].x + lm[24].x)/2, y: (lm[23].y + lm[24].y)/2 };
         const rawKnee = { x: (lm[25].x + lm[26].x)/2, y: (lm[25].y + lm[26].y)/2 };
         const rawAnkle = { x: (lm[27].x + lm[28].x)/2, y: (lm[27].y + lm[28].y)/2 };
         
-        // ★フィルターを通して点を落ち着かせる
         const shoulder = smoothPoint('shoulder', rawShoulder);
+        const elbow = smoothPoint('elbow', rawElbow);
         const hip = smoothPoint('hip', rawHip);
         const knee = smoothPoint('knee', rawKnee);
         const ankle = smoothPoint('ankle', rawAnkle);
@@ -189,61 +191,81 @@ function onResults(results) {
         const hipAngle = calculateAngle(shoulder, hip, knee);
         const kneeAngle = calculateAngle(hip, knee, ankle);
 
-        // ★うつ伏せ判定（肩から踵にかけての高さの差が少なすぎる場合は寝ていると判定）
-        const bodySlopeY = ankle.y - shoulder.y;
-        const isLyingDown = bodySlopeY < 0.10;
+        // 🌟 体が横向き（水平）か判定（座り・立ちでのズル防止）
+        const bodySlope = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
+        const isHorizontal = (bodySlope < 35 || bodySlope > 145);
 
-        // ★色分け判定
-        let hipColor = '#00FFFF'; // 青
-        if (hipAngle < 155) hipColor = '#FF0000'; // 赤
-        else if (hipAngle < 165) hipColor = '#FFFF00'; // 黄
+        // 🌟 肩の真下に肘があるか（腕が垂直か）判定
+        const armSlope = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
+        const isArmVertical = (armSlope > 60 && armSlope < 120) && (elbow.y > shoulder.y + 0.05);
 
-        let kneeColor = '#00FFFF'; // 青
-        if (kneeAngle < 155) kneeColor = '#FF0000'; // 赤
-        else if (kneeAngle < 165) kneeColor = '#FFFF00'; // 黄
+        // 🌟 うつ伏せでサボっていないか判定
+        const isLyingDown = Math.abs(shoulder.y - elbow.y) < 0.08;
 
-        // 寝ていたら強制的に真っ赤
-        if (isLyingDown) {
+        let hipColor = '#00FFFF'; 
+        if (hipAngle < 155) hipColor = '#FF0000'; 
+        else if (hipAngle < 165) hipColor = '#FFFF00'; 
+
+        let kneeColor = '#00FFFF'; 
+        if (kneeAngle < 155) kneeColor = '#FF0000'; 
+        else if (kneeAngle < 165) kneeColor = '#FFFF00'; 
+
+        let armColor = '#00FFFF';
+        if (!isArmVertical) armColor = '#FF0000';
+
+        let bodyColor = '#00FFFF';
+        if (!isHorizontal) bodyColor = '#FF0000';
+
+        if (isLyingDown || !visOK) {
             hipColor = '#FF0000';
             kneeColor = '#FF0000';
+            armColor = '#FF0000';
+            bodyColor = '#FF0000';
         }
 
         const w = canvasElement.width;
         const h = canvasElement.height;
 
-        // ★線を描画
         canvasCtx.lineWidth = 4;
-        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x * w, shoulder.y * h); canvasCtx.lineTo(hip.x * w, hip.y * h); canvasCtx.strokeStyle = hipColor; canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x * w, shoulder.y * h); canvasCtx.lineTo(elbow.x * w, elbow.y * h); canvasCtx.strokeStyle = armColor; canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x * w, shoulder.y * h); canvasCtx.lineTo(hip.x * w, hip.y * h); canvasCtx.strokeStyle = !isHorizontal ? bodyColor : hipColor; canvasCtx.stroke();
         canvasCtx.beginPath(); canvasCtx.moveTo(hip.x * w, hip.y * h); canvasCtx.lineTo(knee.x * w, knee.y * h); canvasCtx.strokeStyle = kneeColor; canvasCtx.stroke();
         canvasCtx.beginPath(); canvasCtx.moveTo(knee.x * w, knee.y * h); canvasCtx.lineTo(ankle.x * w, ankle.y * h); canvasCtx.strokeStyle = kneeColor; canvasCtx.stroke();
 
-        // ★4つの点だけを描画 (サイズは半分の3に)
         const points = [
-            {p: shoulder, c: isLyingDown ? '#FF0000' : '#00FFFF'},
+            {p: elbow, c: armColor},
+            {p: shoulder, c: armColor === '#FF0000' || !isHorizontal ? '#FF0000' : '#00FFFF'},
             {p: hip, c: hipColor},
             {p: knee, c: kneeColor},
             {p: ankle, c: kneeColor}
         ];
         for(let pt of points) {
-            canvasCtx.fillStyle = pt.c;
-            canvasCtx.beginPath();
-            canvasCtx.arc(pt.p.x * w, pt.p.y * h, 3, 0, 2 * Math.PI); // サイズ3！
-            canvasCtx.fill();
+            if (visOK || pt.c === '#FF0000') { 
+                canvasCtx.fillStyle = pt.c;
+                canvasCtx.beginPath();
+                canvasCtx.arc(pt.p.x * w, pt.p.y * h, 3, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            }
         }
 
-        processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown);
+        processGame(shoulder, elbow, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown, isHorizontal, isArmVertical, visOK);
     }
     canvasCtx.restore();
 }
 
-function processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown) {
-    // 155度以上（青か黄）ならタイマーが進む。155未満（赤）か、寝ていたらNG。
-    const isGoodPose = (!isLyingDown && hipAngle >= 155 && kneeAngle >= 155);
+function processGame(shoulder, elbow, hip, knee, ankle, hipAngle, kneeAngle, isLyingDown, isHorizontal, isArmVertical, visOK) {
+    const isGoodPose = (visOK && !isLyingDown && isHorizontal && isArmVertical && hipAngle >= 155 && kneeAngle >= 155);
 
     const debugMsg = document.getElementById('debug_msg');
     
-    if (isLyingDown) {
-        debugMsg.innerText = "❌ うつ伏せだ！肩を上げて踵まで一直線にしろ！";
+    if (!visOK) {
+        debugMsg.innerText = "❌ 全身（肘・肩・腰・膝・踵）を画面に映せ！";
+    } else if (!isHorizontal) {
+        debugMsg.innerText = "❌ 体が水平じゃない！(縦に立ったり座ったりするな！)";
+    } else if (!isArmVertical) {
+        debugMsg.innerText = "❌ 肩の真下に肘を置け！(腕が垂直じゃないぞ！)";
+    } else if (isLyingDown) {
+        debugMsg.innerText = "❌ うつ伏せだ！肘で体を支えて浮かせろ！";
     } else if (!isGoodPose) {
         const hipExpectedY = shoulder.y + (knee.y - shoulder.y) * 0.4;
         if (hipAngle < 155) {
@@ -261,9 +283,17 @@ function processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDow
     const msg = document.getElementById('msg_area');
 
     if (state === "SETUP") {
-        msg.innerText = "正しい姿勢で静止せよ！";
-        msg.className = "msg-waiting";
-        if (isGoodPose) startCountdown();
+        if (!visOK) {
+            msg.innerText = "全身を画面に映せ！";
+            msg.className = "msg-waiting";
+        } else if (!isGoodPose) {
+            msg.innerText = "正しい姿勢で静止せよ！";
+            msg.className = "msg-waiting";
+        } else {
+            msg.innerText = "そのままキープ！";
+            msg.className = "msg-waiting";
+            if (!countdownTimer) startCountdown();
+        }
     } 
     else if (state === "COUNTDOWN") {
         if (!isGoodPose) cancelCountdown();
@@ -274,6 +304,7 @@ function processGame(shoulder, hip, knee, ankle, hipAngle, kneeAngle, isLyingDow
 }
 
 function startCountdown() {
+    if (countdownTimer) return; 
     state = "COUNTDOWN";
     countdownVal = 3;
     const msg = document.getElementById('msg_area');
@@ -286,13 +317,17 @@ function startCountdown() {
             msg.innerText = countdownVal;
         } else {
             clearInterval(countdownTimer);
+            countdownTimer = null;
             beginBattle();
         }
     }, 1000);
 }
 
 function cancelCountdown() {
-    clearInterval(countdownTimer);
+    if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
     state = "SETUP";
 }
 
@@ -368,7 +403,7 @@ function finishGame() {
     const finalScore = Math.floor(holdTime);
     document.getElementById('final_score').innerText = finalScore;
     
-    fetch(`${GAS_URL}?action=squat_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
+    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
         .then(res => res.json())
         .then(data => {
             if(data.success) {
