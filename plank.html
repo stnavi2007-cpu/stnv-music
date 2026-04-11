@@ -18,7 +18,7 @@
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: flex-start; }
         .status-box { background: rgba(0,0,0,0.8); border: 2px solid #0ff; padding: 10px; border-radius: 10px; min-width: 120px; box-shadow: 0 0 10px #0ff; }
-        #timer { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; }
+        #timer { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; transition: color 0.2s, text-shadow 0.2s; }
         
         #msg_area { font-size: 28px; font-weight: bold; padding: 20px; border-radius: 15px; margin-top: 40px; text-shadow: 2px 2px #000; transition: 0.3s; }
         .msg-waiting { color: #fff; background: rgba(100,100,100,0.7); border: 3px dashed #fff; }
@@ -102,18 +102,16 @@ let voiceLocked = false;
 let playId = "";
 let playPass = "";
 
-// ★声のスパム対策用変数
 let lastWarnTime = 0; 
 
 function speak(text) {
     if (voiceLocked) return;
-    // ★前の言葉が話し終わってなくても一旦キャンセル（声の渋滞を防ぐ）
     window.speechSynthesis.cancel(); 
     
     const uttr = new SpeechSynthesisUtterance(text);
     uttr.lang = "ja-JP";
     uttr.rate = 1.2;
-    uttr.volume = 0.4; // ★ボリュームをダウン（うるさすぎないように）
+    uttr.volume = 0.4;
     window.speechSynthesis.speak(uttr);
 }
 
@@ -190,12 +188,19 @@ function processGame(landmarks) {
     const kneeAngle = calculateAngle(hip, knee, ankle);
     const isKneeFloating = knee.y < ankle.y + 0.05; 
 
-    const isGoodPose = (hipAngle > 155 && kneeAngle > 155 && isKneeFloating);
+    // ★ 改善1: 角度判定を厳格化（160度以上をキープ）
+    const isGoodPose = (hipAngle >= 160 && kneeAngle >= 160 && isKneeFloating);
 
     const debugMsg = document.getElementById('debug_msg');
     if (!isGoodPose) {
-        if (hipAngle <= 155) debugMsg.innerText = "❌ 腰が曲がっている！(お尻が出てる/落ちてる)";
-        else if (kneeAngle <= 155) debugMsg.innerText = "❌ 膝が曲がっている！(膝を伸ばせ！)";
+        // ★ 改善1: 腰が高いか低いかをY座標で判定して的確にアドバイス
+        // (腰のY座標が、肩と膝の中間より上なら上がりすぎ、下なら落ちすぎ)
+        const hipExpectedY = shoulder.y + (knee.y - shoulder.y) * 0.4;
+        if (hipAngle < 160) {
+            if (hip.y < hipExpectedY) debugMsg.innerText = "❌ 腰が上がりすぎている！(お尻を下げろ！)";
+            else debugMsg.innerText = "❌ 腰が落ちている！(お尻を上げろ！)";
+        }
+        else if (kneeAngle < 160) debugMsg.innerText = "❌ 膝が曲がっている！(膝を伸ばせ！)";
         else if (!isKneeFloating) debugMsg.innerText = "❌ 膝が床についている！";
     } else {
         debugMsg.innerText = "✅ 完璧なフォーム！";
@@ -249,37 +254,54 @@ function beginBattle() {
     
     try {
         const stream = canvasElement.captureStream(30);
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        // ★ 改善3: iOS Safari向けに最適な動画フォーマットを自動判定
+        let options = {};
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+            options = { mimeType: 'video/webm;codecs=vp9' };
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { mimeType: 'video/mp4' };
+        }
+        
+        mediaRecorder = new MediaRecorder(stream, options);
         recordedChunks = [];
         mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
         mediaRecorder.onstop = saveVideo;
         mediaRecorder.start();
-    } catch(err) {}
+    } catch(err) {
+        console.log("録画非対応ブラウザです");
+    }
 }
 
 function updateBattle(isGoodPose) {
     const msg = document.getElementById('msg_area');
     const ngLabel = document.getElementById('ng_label');
     const ngCount = document.getElementById('ng_countdown');
+    const timerDisplay = document.getElementById('timer');
 
     if (isGoodPose) {
         if (ngTimeStart) {
             ngTimeStart = null;
             ngLabel.style.display = "none";
             ngCount.innerText = "";
-            // ★「復帰」の音声はうるさいので削除！画面でわかればOK
         }
+        // ★ 改善2: 良い姿勢の時だけタイマーが進み、黄色く光る
         holdTime += 0.033;
-        document.getElementById('timer').innerText = holdTime.toFixed(2);
+        timerDisplay.innerText = holdTime.toFixed(2);
+        timerDisplay.style.color = "#ff0"; 
+        timerDisplay.style.textShadow = "0 0 10px #ff0";
+
         msg.innerText = "GOOD POSE!! 🔥";
         msg.className = "msg-ok";
     } else {
+        // ★ 改善2: 悪い姿勢の時はタイマーが赤くなり、ピタッと止まる（ズル防止）
+        timerDisplay.style.color = "#f00"; 
+        timerDisplay.style.textShadow = "0 0 10px #f00";
+
         msg.innerText = "腰を落とすな！！ 🚨";
         msg.className = "msg-ng";
         if (!ngTimeStart) {
             ngTimeStart = Date.now();
             
-            // ★スパム防止：前回怒ってから3秒経過してないと喋らない
             if (Date.now() - lastWarnTime > 3000) {
                 speak("姿勢を戻せ！");
                 lastWarnTime = Date.now();
@@ -306,7 +328,7 @@ function finishGame() {
     const finalScore = Math.floor(holdTime);
     document.getElementById('final_score').innerText = finalScore;
     
-    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
+    fetch(`${GAS_URL}?action=squat_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
         .then(res => res.json())
         .then(data => {
             if(data.success) {
@@ -321,11 +343,14 @@ function finishGame() {
 }
 
 function saveVideo() {
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    // ★ 改善3: 保存時の拡張子を自動で最適化
+    const mimeType = mediaRecorder.mimeType || 'video/webm';
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const blob = new Blob(recordedChunks, { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.getElementById('download_link');
     link.href = url;
-    link.download = `STNV_PLANK_${new Date().getTime()}.webm`;
+    link.download = `STNV_PLANK_${new Date().getTime()}.${ext}`;
     link.style.display = "inline-block";
 }
 </script>
