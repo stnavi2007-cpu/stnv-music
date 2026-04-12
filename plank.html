@@ -8,55 +8,319 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Noto+Sans+JP:wght@700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Noto+Sans+JP:wght@700;900&display=swap');
         
+        /* ---------------------------------------------------
+           GLOBAL & BACKGROUND
+        --------------------------------------------------- */
         body { 
-            background: #000; color: #fff; 
+            background: #000; 
+            color: #fff; 
             font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
-            margin: 0; overflow: hidden; text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            text-align: center; 
             touch-action: manipulation; 
         }
         
-        #video_container { position: relative; width: 100vw; height: 100vh; background: #111; display: none; box-shadow: inset 0 0 50px rgba(0,255,255,0.1); }
+        #video_container { 
+            position: relative; 
+            width: 100vw; 
+            height: 100vh; 
+            background: #050914; 
+            display: none; 
+            box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.15); 
+        }
         
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+        }
+        
         video { display: none; }
         
+        .overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background-color: #050914;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), 
+                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), 
+                radial-gradient(circle at center, rgba(0, 40, 60, 0.8) 0%, rgba(0, 0, 0, 0.95) 100%); 
+            background-size: 40px 40px, 40px 40px, 100% 100%; 
+            background-position: center center;
+            z-index: 100; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            text-align: center; 
+        }
+
+        /* ---------------------------------------------------
+           START SCREEN
+        --------------------------------------------------- */
+        #start_screen h1 {
+            color: transparent !important;
+            background: linear-gradient(135deg, #00ffff 0%, #0066ff 100%) !important;
+            -webkit-background-clip: text !important;
+            text-shadow: none !important;
+            filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.5));
+            font-style: italic;
+            font-size: 65px !important;
+            margin-bottom: 5px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        #start_screen p {
+            color: #b3e5fc !important;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+
+        #start_screen div[style*="background"] {
+            background: rgba(0, 15, 25, 0.6) !important;
+            border: 1px solid rgba(0, 255, 255, 0.2) !important;
+            border-left: 4px solid #00ffff !important;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px !important;
+            line-height: 1.6;
+            color: #e0f7fa;
+            width: 85%;
+            max-width: 400px;
+        }
+
+        /* ---------------------------------------------------
+           INPUTS & BUTTONS
+        --------------------------------------------------- */
+        .login-input { 
+            background: rgba(0, 10, 20, 0.7); 
+            border: 1px solid rgba(0, 255, 255, 0.3); 
+            border-radius: 8px;
+            color: #fff; 
+            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
+            font-size: 20px; 
+            padding: 15px; 
+            text-align: center; 
+            width: 85%; 
+            max-width: 350px; 
+            margin: 10px auto; 
+            pointer-events: auto; 
+            display: block; 
+            transition: all 0.3s ease;
+            box-shadow: inset 0 0 10px rgba(0,255,255,0.05);
+        }
+        
+        .login-input:focus {
+            outline: none;
+            border-color: #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 10px rgba(0, 255, 255, 0.2);
+            background: rgba(0, 20, 40, 0.8);
+        }
+
+        .login-input::placeholder { color: rgba(0, 255, 255, 0.4); }
+
+        .btn, #download_link { 
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); 
+            color: #000; 
+            border: none; 
+            border-radius: 8px; 
+            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
+            font-size: 22px; 
+            font-weight: 900; 
+            cursor: pointer; 
+            margin-top: 25px;
+            padding: 18px 40px; 
+            width: 85%; 
+            max-width: 350px; 
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4); 
+            pointer-events: auto; 
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-decoration: none;
+            box-sizing: border-box;
+            display: inline-block; /* JSの制御を尊重しつつ、リンクの見た目を修正 */
+        }
+        
+        #download_link { display: none; text-align: center; }
+
+        .btn:hover, #download_link:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.7);
+        }
+        
+        .btn:active, #download_link:active {
+            transform: scale(0.98);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+        }
+
+        /* ---------------------------------------------------
+           GAME HUD (UI LAYER)
+        --------------------------------------------------- */
         .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: block; }
         
-        .header { display: flex; justify-content: space-between; width: 100%; position: absolute; top: 20px; left: 0; padding: 0 30px; box-sizing: border-box; }
-        .status-box { background: rgba(0, 20, 30, 0.8); border: 2px solid #0ff; padding: 15px 25px; border-radius: 12px; min-width: 180px; box-shadow: 0 0 20px rgba(0,255,255,0.4); backdrop-filter: blur(4px); }
-        .status-title { font-size: 16px; color: #0ff; font-weight: bold; letter-spacing: 2px; margin-bottom: 5px; }
-        #timer { font-size: 55px; font-weight: 900; color: #ff0; text-shadow: 0 0 15px #ff0; transition: color 0.2s, text-shadow 0.2s; line-height: 1; }
-        #ng_countdown { font-size: 55px; font-weight: 900; color: #f00; text-shadow: 0 0 15px #f00; line-height: 1; }
-
-        .message-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
+        .header { display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; left: 0; padding: 0 30px; box-sizing: border-box; }
         
-        #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; padding: 0; border: none; background: transparent; }
-        .msg-waiting { color: #fff; background: rgba(0,0,0,0.7); border: 3px solid #fff; padding: 10px 30px; }
-        .msg-countdown { color: #ff0; background: rgba(255,255,0,0.4); border: 4px solid #ff0; font-size: 80px !important; padding: 15px 40px; }
+        .status-box { 
+            background: rgba(0, 15, 25, 0.7); 
+            border: 1px solid rgba(0, 255, 255, 0.2); 
+            border-top: 4px solid #00ffff;
+            padding: 15px 25px; 
+            border-radius: 12px; 
+            min-width: 180px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(0,255,255,0.15); 
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        
+        .status-title { 
+            font-size: 14px; 
+            color: #80deea; 
+            font-weight: 900; 
+            letter-spacing: 3px; 
+            margin-bottom: 8px; 
+            text-transform: uppercase;
+        }
+        
+        #timer { 
+            font-family: 'Montserrat', sans-serif;
+            font-size: 60px; 
+            font-weight: 900; 
+            color: #ffea00; 
+            text-shadow: 0 0 20px rgba(255, 234, 0, 0.6); 
+            transition: color 0.2s, text-shadow 0.2s; 
+            line-height: 1; 
+        }
+        
+        #ng_countdown { 
+            font-family: 'Montserrat', sans-serif;
+            font-size: 60px; 
+            font-weight: 900; 
+            color: #ff0055; 
+            text-shadow: 0 0 20px rgba(255, 0, 85, 0.6); 
+            line-height: 1; 
+        }
+
+        #ng_label { color: #ff0055 !important; }
+
+        /* ---------------------------------------------------
+           MESSAGES & LYRICS
+        --------------------------------------------------- */
+        .message-container { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
+        
+        #msg_area { 
+            font-size: 40px; 
+            font-weight: 900; 
+            border-radius: 15px; 
+            text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; 
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
+            display: inline-block; 
+            padding: 0; 
+            border: none; 
+            background: transparent; 
+        }
+        
+        .msg-waiting { 
+            color: #00ffff; 
+            background: rgba(0, 20, 30, 0.8) !important; 
+            border: 2px solid rgba(0, 255, 255, 0.5) !important; 
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(8px);
+            padding: 15px 40px !important; 
+        }
+        
+        .msg-countdown { 
+            color: #ffea00; 
+            background: rgba(255, 234, 0, 0.15) !important; 
+            border: 3px solid #ffea00 !important; 
+            box-shadow: 0 0 40px rgba(255, 234, 0, 0.4);
+            backdrop-filter: blur(8px);
+            font-size: 100px !important; 
+            padding: 20px 60px !important; 
+            border-radius: 20px !important;
+        }
         
         #lyrics_area { 
-            font-size: 42px; color: #fff; font-weight: 900; 
-            text-shadow: 3px 3px 0 #000, 0 0 20px #0ff; 
-            min-height: 1.5em; width: 100%;
+            font-size: 38px; 
+            color: #ffffff; 
+            font-weight: 900; 
+            text-shadow: 0 0 10px #000, 0 0 20px #000, 0 0 30px rgba(0, 255, 255, 0.8); 
+            min-height: 1.5em; 
+            width: 100%;
+            margin-top: 15px;
+            letter-spacing: 2px;
         }
 
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); background-size: 30px 30px, 30px 30px, 100% 100%; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
-        .login-input { background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; font-family: 'Montserrat', sans-serif; font-size: 24px; padding: 12px; text-align: center; width: 85%; max-width: 350px; border-radius: 8px; margin: 10px auto; pointer-events: auto; display: block; }
-        .btn { padding: 18px 40px; background: linear-gradient(45deg, #004444, #008888); color: #0ff; border: 2px solid #0ff; border-radius: 8px; font-family: 'Montserrat', sans-serif; font-size: 24px; font-weight: 900; cursor: pointer; margin-top: 25px; width: 85%; max-width: 350px; box-shadow: 0 0 15px rgba(0,255,255,0.4); pointer-events: auto; }
+        /* ---------------------------------------------------
+           RESULT SCREEN
+        --------------------------------------------------- */
+        #result_overlay h1 {
+            color: transparent !important;
+            background: linear-gradient(135deg, #f6d365 0%, #ffb347 100%) !important;
+            -webkit-background-clip: text !important;
+            text-shadow: none !important;
+            filter: drop-shadow(0 0 20px rgba(255, 179, 71, 0.8));
+            font-style: italic;
+            font-size: 75px !important;
+            margin-bottom: 30px;
+        }
+
+        #result_overlay div[style*="font-size:30px"] {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+
+        #final_score {
+            color: #00ffcc !important;
+            text-shadow: 0 0 25px rgba(0, 255, 204, 0.8) !important;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 90px !important;
+            display: inline-block;
+            transform: scale(1.1);
+            margin: 0 15px;
+        }
+
+        #save_status {
+            font-size: 18px;
+            letter-spacing: 1px;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 10px 25px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 10px;
+            margin-bottom: 30px !important;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1 style="color:#0ff; text-shadow: 0 0 15px #0ff; font-size: 50px;">AI PLANK QUEST</h1>
-    <p style="color:#fff; font-size:18px;">己の肉体で魔王に挑戦しよう！</p>
+    <h1 style="color:#0ff; text-shadow: 0 0 15px #0ff; font-size: 50px;">PLANK BATTLE</h1>
+    <p style="color:#fff; font-size:18px;">己の限界に挑戦しよう！</p>
     <div style="background: rgba(0,255,255,0.1); padding: 15px; border: 1px solid #0ff; border-radius: 8px; margin-bottom: 25px; font-size: 16px;">
-        ⚠️ カメラの許可を求められたら「許可」を押してね！<br>
-        ⚠️ 服はインして、真横から全身が映るようにしてね！
+        ⚠️ カメラを「許可」をしてね！<br>
+        ⚠️ 服はインして、体のラインが見やすい服で真横から全身が映るように撮影してね！
     </div>
     <input type="text" id="play_id" class="login-input" placeholder="ダンサーID">
     <input type="password" id="play_pass" class="login-input" placeholder="パスワード">
@@ -235,7 +499,6 @@ function onResults(results) {
         const hAngle = calculateAngle(shoulder, hip, knee);
         const kAngle = calculateAngle(hip, knee, ankle);
         
-        // 修正: 左右どちらの向きでも判定できるように絶対角度でチェック
         const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
         const isH = angleToHorizontal < 35 || angleToHorizontal > 145;
         
@@ -298,10 +561,10 @@ function updateBattle(isGood) {
             ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; 
             bgm.play(); // 復帰時に音楽再開
         }
-        holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ff0"; wasGoodPose = true;
+        holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ffea00"; wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
-        tD.style.color = "#f00";
+        tD.style.color = "#ff0055";
         if (!ngTimeStart) ngTimeStart = Date.now();
         let remain = (5.0 - (Date.now() - ngTimeStart) / 1000).toFixed(1);
         if (Math.ceil(remain) !== lastNgCount && remain > 0) { playSound('tick'); lastNgCount = Math.ceil(remain); }
