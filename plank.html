@@ -30,12 +30,11 @@
         #timer { font-size: 55px; font-weight: 900; color: #ff0; text-shadow: 0 0 15px #ff0; transition: color 0.2s, text-shadow 0.2s; line-height: 1; }
         #ng_countdown { font-size: 55px; font-weight: 900; color: #f00; text-shadow: 0 0 15px #f00; line-height: 1; }
 
-        .message-container { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
+        /* 🌟 メッセージエリアを画面の「真下」へ移動 */
+        .message-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
         
-        /* 🌟 修正: min-heightなどを消し、文字が無い時は枠ごと消えるようにしました */
-        #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; margin-bottom: 15px; padding: 0; border: none; background: transparent; }
+        #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; margin-bottom: 5px; padding: 0; border: none; background: transparent; }
         
-        /* 🌟 文字が入った時だけパディングと枠線がつくように設定 */
         .msg-waiting { color: #fff; background: rgba(0,0,0,0.6); border: 3px solid #fff; padding: 15px 40px; }
         .msg-countdown { color: #ff0; background: rgba(255,255,0,0.4); border: 4px solid #ff0; font-size: 80px !important; padding: 15px 40px; }
         .msg-ok { color: #0f0; border: 4px solid #0f0; background: rgba(0,255,0,0.25); padding: 15px 40px; }
@@ -44,7 +43,7 @@
         #lyrics_area { 
             font-size: 38px; color: #fff; font-weight: 900; 
             text-shadow: 3px 3px 0 #000, 0 0 15px #0ff; 
-            margin-top: 10px; min-height: 1.5em; width: 100%;
+            min-height: 1.5em; width: 100%;
         }
 
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
@@ -52,6 +51,7 @@
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); background-size: 30px 30px, 30px 30px, 100% 100%; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
         
         .login-input { background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; font-family: 'Montserrat', 'Noto Sans JP', sans-serif; font-size: 24px; padding: 12px; text-align: center; width: 85%; max-width: 350px; outline: none; box-shadow: 0 0 10px rgba(0,255,255,0.3); border-radius: 8px; margin: 10px auto; pointer-events: auto; display: block; transition: 0.2s; }
+        .login-input:focus { box-shadow: 0 0 20px rgba(0,255,255,0.8); }
         .btn { padding: 18px 40px; background: linear-gradient(45deg, rgba(0,50,50,0.8), rgba(0,100,100,0.8)); color: #0ff; border: 2px solid #0ff; border-radius: 8px; font-family: 'Montserrat', 'Noto Sans JP', sans-serif; font-size: 24px; font-weight: 900; cursor: pointer; margin-top: 25px; width: 85%; max-width: 350px; box-shadow: 0 0 15px rgba(0,255,255,0.4), inset 0 0 10px rgba(0,255,255,0.2); transition: 0.2s; pointer-events: auto; text-transform: uppercase; }
         .btn:active { transform: scale(0.95); box-shadow: 0 0 5px #0ff, inset 0 0 5px #0ff; }
         .btn-exit { background: rgba(50,50,50,0.8); color: #fff; border-color: #aaa; box-shadow: none; }
@@ -175,6 +175,8 @@ let showInitialMsg = true;
 
 const bgm = new Audio('https://raw.githubusercontent.com/stnavi2007-cpu/stnv-music/refs/heads/main/plank_music.mp3');
 bgm.loop = false;
+// クロスドメインで再生するための設定
+bgm.crossOrigin = "anonymous"; 
 
 function playSound(type) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -209,8 +211,14 @@ function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
+    
+    // ★ 修正: ユーザーのアクションと同時にAudioContextとBGMのロックを強制解除する
     playSound('tick');
-    bgm.play().then(() => bgm.pause()).catch(e => console.log("BGM setup:", e));
+    bgm.play().then(() => {
+        bgm.pause();
+        bgm.currentTime = 0;
+    }).catch(e => console.log("BGM Unlock Failed:", e));
+
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
     initAI(); 
@@ -220,7 +228,9 @@ function initAI() {
     videoElement = document.getElementById('input_video');
     canvasElement = document.getElementById('output_canvas');
     canvasCtx = canvasElement.getContext('2d');
-    setTimeout(() => { showInitialMsg = false; }, 3000);
+    
+    setTimeout(() => { showInitialMsg = false; }, 6000);
+    
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     pose.onResults(onResults);
@@ -308,10 +318,6 @@ function startCountdown() {
     if (countdownTimer) return; state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
     
-    // カウントダウン開始時にBGMをスタート
-    bgm.currentTime = 0;
-    bgm.play().catch(e => console.log("BGM Error:", e));
-
     countdownTimer = setInterval(() => {
         countdownVal--;
         if (countdownVal > 0) { msg.innerText = countdownVal; playSound('tick'); } 
@@ -328,7 +334,10 @@ function cancelCountdown() {
 }
 
 function beginBattle() { 
-    state = "BATTLE"; holdTime = 0; bgm.play(); 
+    state = "BATTLE"; holdTime = 0; 
+    bgm.currentTime = 0;
+    bgm.play().catch(e => console.log("BGM Error:", e));
+    
     try {
         const stream = canvasElement.captureStream(30);
         let options = { mimeType: 'video/mp4' };
@@ -349,11 +358,12 @@ function updateBattle(isGoodPose) {
     const ngCount = document.getElementById('ng_countdown'); 
     const timerDisplay = document.getElementById('timer');
     
+    msg.style.opacity = 0; 
+
     if (isGoodPose) {
         if (ngTimeStart) { ngTimeStart = null; ngLabel.style.display = "none"; ngCount.innerText = ""; lastNgCount = -1; bgm.play(); }
         holdTime += 0.033; timerDisplay.innerText = holdTime.toFixed(2);
         timerDisplay.style.color = "#ff0"; timerDisplay.style.textShadow = "0 0 15px #ff0";
-        msg.innerText = ""; msg.className = "";
         wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
@@ -362,7 +372,6 @@ function updateBattle(isGoodPose) {
         let elapsed = (Date.now() - ngTimeStart) / 1000; let remain = (5.0 - elapsed).toFixed(1);
         let currentSec = Math.ceil(remain); if (currentSec !== lastNgCount && remain > 0) { playSound('tick'); lastNgCount = currentSec; }
         ngLabel.style.display = "block"; ngCount.innerText = remain;
-        msg.innerText = ""; msg.className = "";
         if (remain <= 0) finishGame();
     }
 }
@@ -373,7 +382,6 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     const finalScore = Math.floor(holdTime); document.getElementById('final_score').innerText = finalScore;
     
-    // plack_clear という元の指定通りに設定（もしsquat_clear等別名ならここを変更してください）
     fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
         .then(res => res.json()).then(data => { document.getElementById('save_status').innerText = data.success ? "通信完了！ポイント付与！" : "エラー: " + data.message; })
         .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
