@@ -157,21 +157,23 @@ function playSound(type) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
-    if (type === 'buzzer') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'tick') {
+    
+    if (type === 'tick') {
         osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'buzzer') {
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
     }
 }
 
 function updateLyrics() {
     const ct = bgm.currentTime;
     let text = "";
-    // ★ 修正箇所1: 歌詞が最後までスムーズに更新されるようにロジックを微調整しました
+    // ★修正1: 歌詞の取得ロジックを確実に。
+    // 現在の再生時間以下のうち、最も時間(time)の大きい要素のテキストを表示する
     for (let i = 0; i < LYRICS.length; i++) {
         if (ct >= LYRICS[i].time) {
             text = LYRICS[i].text;
@@ -180,11 +182,25 @@ function updateLyrics() {
     document.getElementById('lyrics_area').innerText = text;
 }
 
-function loginAndStart() {
+async function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
+    try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+
+    // ★ブラウザの自動再生制限を解除するための事前再生
+    playSound('tick');
+    bgm.muted = true;
+    let playPromise = bgm.play();
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            bgm.pause();
+            bgm.currentTime = 0;
+            bgm.muted = false;
+        }).catch(e => {});
+    }
+
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
     initAI(); 
@@ -201,7 +217,7 @@ function initAI() {
     camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
     camera.start().catch(err => { alert("カメラ起動失敗！"); });
     
-    // ★ 修正箇所2: 音楽が最後まで再生されたら終了画面へ
+    // ★修正2: 曲の終了イベントをリッスン
     bgm.addEventListener('ended', () => { finishGame(); });
 }
 
@@ -286,9 +302,15 @@ function beginBattle() {
 }
 
 function updateBattle(isGood) {
+    // ★修正2: 二重の終了検知（曲の長さが271秒以上なら確実に終了する）
+    if (bgm.currentTime > 0 && (bgm.currentTime >= bgm.duration || bgm.currentTime > 275)) {
+        finishGame();
+        return;
+    }
+
     const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
     if (isGood) {
-        if (ngTimeStart) { ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; bgm.play(); }
+        if (ngTimeStart) { ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; bgm.play().catch(e=>{}); }
         holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ff0"; wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
@@ -307,7 +329,7 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
     
-    // ★ 修正箇所3: スプレッドシートのAN列（column=AN）にデータを送信するようにURLパラメータを修正しました
+    // ★修正3: AN列への送信（指定を維持）
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
         .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message)
         .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
