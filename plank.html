@@ -32,13 +32,15 @@
 
         .message-container { position: absolute; top: 18%; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
         
-        #msg_area { font-size: 45px; font-weight: 900; padding: 15px 40px; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; margin-bottom: 15px; min-height: 1.2em; }
-        .msg-waiting { color: #fff; background: rgba(0,0,0,0.6); border: 3px solid #fff; }
-        .msg-countdown { color: #ff0; background: rgba(255,255,0,0.4); border: 4px solid #ff0; font-size: 80px !important; }
-        .msg-ok { color: #0f0; border: 4px solid #0f0; background: rgba(0,255,0,0.25); }
-        .msg-ng { color: #f00; border: 4px solid #f00; background: rgba(255,0,0,0.6); animation: flash 0.3s infinite; }
+        /* 🌟 修正: min-heightなどを消し、文字が無い時は枠ごと消えるようにしました */
+        #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; margin-bottom: 15px; padding: 0; border: none; background: transparent; }
         
-        /* 🌟 歌詞表示専用のスタイル */
+        /* 🌟 文字が入った時だけパディングと枠線がつくように設定 */
+        .msg-waiting { color: #fff; background: rgba(0,0,0,0.6); border: 3px solid #fff; padding: 15px 40px; }
+        .msg-countdown { color: #ff0; background: rgba(255,255,0,0.4); border: 4px solid #ff0; font-size: 80px !important; padding: 15px 40px; }
+        .msg-ok { color: #0f0; border: 4px solid #0f0; background: rgba(0,255,0,0.25); padding: 15px 40px; }
+        .msg-ng { color: #f00; border: 4px solid #f00; background: rgba(255,0,0,0.6); animation: flash 0.3s infinite; padding: 15px 40px; }
+        
         #lyrics_area { 
             font-size: 38px; color: #fff; font-weight: 900; 
             text-shadow: 3px 3px 0 #000, 0 0 15px #0ff; 
@@ -88,7 +90,7 @@
         </div>
         
         <div class="message-container">
-            <div id="msg_area" class="msg-waiting"></div>
+            <div id="msg_area"></div>
             <div id="lyrics_area"></div>
         </div>
     </div>
@@ -286,8 +288,13 @@ function processGame(visOK, isLyingDown, isHorizontal, isArmVertical, hipAngle, 
     const isGoodPose = (visOK && !isLyingDown && isHorizontal && isArmVertical && hipAngle >= 155 && kneeAngle >= 155);
     const msg = document.getElementById('msg_area');
     if (state === "SETUP") {
-        msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
-        msg.className = "msg-waiting";
+        if (showInitialMsg) {
+            msg.innerText = "カメラを横向きにして撮影してね！";
+            msg.className = "msg-waiting";
+        } else {
+            msg.innerText = "";
+            msg.className = "";
+        }
         if (isGoodPose && !countdownTimer) startCountdown();
     } else if (state === "COUNTDOWN") {
         if (!isGoodPose) cancelCountdown();
@@ -300,6 +307,11 @@ function processGame(visOK, isLyingDown, isHorizontal, isArmVertical, hipAngle, 
 function startCountdown() {
     if (countdownTimer) return; state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
+    
+    // カウントダウン開始時にBGMをスタート
+    bgm.currentTime = 0;
+    bgm.play().catch(e => console.log("BGM Error:", e));
+
     countdownTimer = setInterval(() => {
         countdownVal--;
         if (countdownVal > 0) { msg.innerText = countdownVal; playSound('tick'); } 
@@ -307,7 +319,13 @@ function startCountdown() {
     }, 1000);
 }
 
-function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } state = "SETUP"; }
+function cancelCountdown() { 
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } 
+    bgm.pause();
+    state = "SETUP"; 
+    document.getElementById('msg_area').innerText = "";
+    document.getElementById('msg_area').className = "";
+}
 
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; bgm.play(); 
@@ -326,11 +344,16 @@ function beginBattle() {
 }
 
 function updateBattle(isGoodPose) {
-    const ngLabel = document.getElementById('ng_label'); const ngCount = document.getElementById('ng_countdown'); const timerDisplay = document.getElementById('timer');
+    const msg = document.getElementById('msg_area');
+    const ngLabel = document.getElementById('ng_label'); 
+    const ngCount = document.getElementById('ng_countdown'); 
+    const timerDisplay = document.getElementById('timer');
+    
     if (isGoodPose) {
         if (ngTimeStart) { ngTimeStart = null; ngLabel.style.display = "none"; ngCount.innerText = ""; lastNgCount = -1; bgm.play(); }
         holdTime += 0.033; timerDisplay.innerText = holdTime.toFixed(2);
         timerDisplay.style.color = "#ff0"; timerDisplay.style.textShadow = "0 0 15px #ff0";
+        msg.innerText = ""; msg.className = "";
         wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
@@ -339,6 +362,7 @@ function updateBattle(isGoodPose) {
         let elapsed = (Date.now() - ngTimeStart) / 1000; let remain = (5.0 - elapsed).toFixed(1);
         let currentSec = Math.ceil(remain); if (currentSec !== lastNgCount && remain > 0) { playSound('tick'); lastNgCount = currentSec; }
         ngLabel.style.display = "block"; ngCount.innerText = remain;
+        msg.innerText = ""; msg.className = "";
         if (remain <= 0) finishGame();
     }
 }
@@ -348,7 +372,9 @@ function finishGame() {
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     document.getElementById('result_overlay').style.display = "flex";
     const finalScore = Math.floor(holdTime); document.getElementById('final_score').innerText = finalScore;
-    fetch(`${GAS_URL}?action=squat_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
+    
+    // plack_clear という元の指定通りに設定（もしsquat_clear等別名ならここを変更してください）
+    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${finalScore}`)
         .then(res => res.json()).then(data => { document.getElementById('save_status').innerText = data.success ? "通信完了！ポイント付与！" : "エラー: " + data.message; })
         .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
 }
