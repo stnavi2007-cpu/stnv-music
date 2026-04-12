@@ -42,22 +42,9 @@
             min-height: 1.5em; width: 100%;
         }
 
-        #boss_bamboo {
-            position: absolute;
-            width: 150px; 
-            height: auto;
-            transform: translate(-50%, -100%); 
-            display: none; 
-            z-index: 5;
-            pointer-events: none;
-            animation: bounceDance 0.6s infinite alternate cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        @keyframes bounceDance {
-            0% { transform: translate(-50%, -100%) scaleY(0.9); }
-            100% { transform: translate(-50%, -120%) scaleY(1.05); }
-        }
+        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); background-size: 30px 30px, 30px 30px, 100% 100%; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
         .login-input { background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; font-family: 'Montserrat', sans-serif; font-size: 24px; padding: 12px; text-align: center; width: 85%; max-width: 350px; border-radius: 8px; margin: 10px auto; pointer-events: auto; display: block; }
         .btn { padding: 18px 40px; background: linear-gradient(45deg, #004444, #008888); color: #0ff; border: 2px solid #0ff; border-radius: 8px; font-family: 'Montserrat', sans-serif; font-size: 24px; font-weight: 900; cursor: pointer; margin-top: 25px; width: 85%; max-width: 350px; box-shadow: 0 0 15px rgba(0,255,255,0.4); pointer-events: auto; }
     </style>
@@ -79,9 +66,6 @@
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
-    
-    <img id="boss_bamboo" src="https://i.ibb.co/39Gt3KWN/image.png" alt="魔王バンブー">
-
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
@@ -173,7 +157,6 @@ function playSound(type) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
-    
     if (type === 'buzzer') {
         osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
@@ -185,12 +168,14 @@ function playSound(type) {
     }
 }
 
+// 🌟 修正1: 歌詞が途中で止まらないように、すべての歌詞を判定するように変更しました。
 function updateLyrics() {
     const ct = bgm.currentTime;
     let text = "";
     for (let i = 0; i < LYRICS.length; i++) {
-        if (ct >= LYRICS[i].time) text = LYRICS[i].text;
-        else break;
+        if (ct >= LYRICS[i].time) {
+            text = LYRICS[i].text;
+        }
     }
     document.getElementById('lyrics_area').innerText = text;
 }
@@ -200,11 +185,6 @@ function loginAndStart() {
     playPass = document.getElementById('play_pass').value;
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
-    // ★ 確実な解決策：ミュート状態で一回再生しておく（スマホのブロック回避）
-    playSound('tick');
-    bgm.volume = 0;
-    bgm.play().catch(e => console.log("BGM Init Error:", e));
-
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
     initAI(); 
@@ -221,6 +201,7 @@ function initAI() {
     camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
     camera.start().catch(err => { alert("カメラ起動失敗！"); });
     
+    // 🌟 修正2: 曲が終わったら終了（オールコンプリート）になるようにリスナーを追加しました。
     bgm.addEventListener('ended', () => { finishGame(); });
 }
 
@@ -241,100 +222,49 @@ function onResults(results) {
     canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    
-    const boss = document.getElementById('boss_bamboo');
-
     if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
         const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
         const visOK = getV(11,12) > 0.5 && getV(13,14) > 0.5 && getV(23,24) > 0.5 && getV(25,26) > 0.5 && getV(27,28) > 0.5;
-        
-        const rawShoulder = { x: (lm[11].x+lm[12].x)/2, y: (lm[11].y+lm[12].y)/2 };
-        const rawElbow = { x: (lm[13].x+lm[14].x)/2, y: (lm[13].y+lm[14].y)/2 };
-        const rawHip = { x: (lm[23].x+lm[24].x)/2, y: (lm[23].y+lm[24].y)/2 };
-        const rawKnee = { x: (lm[25].x+lm[26].x)/2, y: (lm[25].y+lm[26].y)/2 };
-        const rawAnkle = { x: (lm[27].x+lm[28].x)/2, y: (lm[27].y+lm[28].y)/2 };
-        
-        const shoulder = smoothPoint('shoulder', rawShoulder); 
-        const elbow = smoothPoint('elbow', rawElbow);
-        const hip = smoothPoint('hip', rawHip); 
-        const knee = smoothPoint('knee', rawKnee); 
-        const ankle = smoothPoint('ankle', rawAnkle);
-        
-        const hipAngle = calculateAngle(shoulder, hip, knee); 
-        const kneeAngle = calculateAngle(hip, knee, ankle);
-        
-        const bodySlope = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        const isHorizontal = (bodySlope < 35 || bodySlope > 145);
-        
-        const armSlope = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
-        const isArmVertical = (armSlope > 60 && armSlope < 120) && (elbow.y > shoulder.y + 0.05);
-        
-        const isLyingDown = Math.abs(shoulder.y - elbow.y) < 0.08;
-        
-        let hColor = (hipAngle < 155) ? '#FF0000' : (hipAngle < 165) ? '#FFFF00' : '#00FFFF';
-        let kColor = (kneeAngle < 155) ? '#FF0000' : (kneeAngle < 165) ? '#FFFF00' : '#00FFFF';
-        let aColor = (!isArmVertical) ? '#FF0000' : '#00FFFF';
-        let bColor = (!isHorizontal) ? '#FF0000' : '#00FFFF';
-        
-        if (isLyingDown || !visOK) { hColor = kColor = aColor = bColor = '#FF0000'; }
+        const shoulder = smoothPoint('s', { x: (lm[11].x+lm[12].x)/2, y: (lm[11].y+lm[12].y)/2 });
+        const elbow = smoothPoint('e', { x: (lm[13].x+lm[14].x)/2, y: (lm[13].y+lm[14].y)/2 });
+        const hip = smoothPoint('h', { x: (lm[23].x+lm[24].x)/2, y: (lm[23].y+lm[24].y)/2 });
+        const knee = smoothPoint('k', { x: (lm[25].x+lm[26].x)/2, y: (lm[25].y+lm[26].y)/2 });
+        const ankle = smoothPoint('a', { x: (lm[27].x+lm[28].x)/2, y: (lm[27].y+lm[28].y)/2 });
+        const hAngle = calculateAngle(shoulder, hip, knee);
+        const kAngle = calculateAngle(hip, knee, ankle);
+        const isH = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI) < 35;
+        const isV = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI) > 60;
+        const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
+        let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
-        
-        if (state === "BATTLE" && visOK) {
-            boss.style.display = "block";
-            const renderW = videoElement.clientWidth;
-            const renderH = videoElement.clientHeight;
-            const bossX = (1 - hip.x) * renderW;
-            const bossY = hip.y * renderH;
-            boss.style.left = `${bossX}px`;
-            boss.style.top = `${bossY}px`;
-        } else {
-            boss.style.display = "none";
-        }
-
-        canvasCtx.lineWidth = 4; 
-        
-        canvasCtx.strokeStyle = aColor;
+        canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
-        
-        canvasCtx.strokeStyle = !isHorizontal ? bColor : hColor;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(hip.x*w, hip.y*h); canvasCtx.stroke();
-        
-        canvasCtx.strokeStyle = kColor;
         canvasCtx.beginPath(); canvasCtx.moveTo(hip.x*w, hip.y*h); canvasCtx.lineTo(knee.x*w, knee.y*h); canvasCtx.stroke();
-        
-        canvasCtx.strokeStyle = kColor;
         canvasCtx.beginPath(); canvasCtx.moveTo(knee.x*w, knee.y*h); canvasCtx.lineTo(ankle.x*w, ankle.y*h); canvasCtx.stroke();
-        
-        processGame(visOK, isLyingDown, isHorizontal, isArmVertical, hipAngle, kneeAngle);
-    } else {
-        boss.style.display = "none";
+        processGame(visOK, isL, isH, isV, hAngle, kAngle);
     }
     canvasCtx.restore();
 }
 
-function processGame(visOK, isLyingDown, isHorizontal, isArmVertical, hipAngle, kneeAngle) {
-    const isGoodPose = (visOK && !isLyingDown && isHorizontal && isArmVertical && hipAngle >= 155 && kneeAngle >= 155);
+function processGame(visOK, isL, isH, isV, ha, ka) {
+    const isGood = visOK && !isL && isH && isV && ha >= 155 && ka >= 155;
     const msg = document.getElementById('msg_area');
     if (state === "SETUP") {
-        if (showInitialMsg) {
-            msg.innerText = "カメラを横向きにして撮影してね！";
-            msg.className = "msg-waiting";
-        } else {
-            msg.innerText = "";
-            msg.className = "";
-        }
-        if (isGoodPose && !countdownTimer) startCountdown();
+        msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
+        msg.className = showInitialMsg ? "msg-waiting" : "";
+        if (isGood && !countdownTimer) startCountdown();
     } else if (state === "COUNTDOWN") {
-        if (!isGoodPose) cancelCountdown();
+        if (!isGood) cancelCountdown();
     } else if (state === "BATTLE") {
-        updateBattle(isGoodPose);
+        updateBattle(isGood);
         updateLyrics();
     }
 }
 
 function startCountdown() {
-    if (countdownTimer) return; state = "COUNTDOWN"; countdownVal = 3;
+    state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
     
     countdownTimer = setInterval(() => {
@@ -344,25 +274,20 @@ function startCountdown() {
     }, 1000);
 }
 
-function cancelCountdown() { 
-    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } 
-    state = "SETUP"; 
-}
+function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } state = "SETUP"; }
 
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; 
     
-    // ★ 3カウントが終わったこの瞬間に、曲を頭出ししてミュートを解除する！
     bgm.currentTime = 0;
-    bgm.volume = 1;
-    bgm.play().catch(e => console.log("BGM Play Error:", e));
+    bgm.play().catch(e => console.log("BGM Error:", e));
     
     try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} 
 }
 
-function updateBattle(isGoodPose) {
+function updateBattle(isGood) {
     const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
-    if (isGoodPose) {
+    if (isGood) {
         if (ngTimeStart) { ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; bgm.play(); }
         holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ff0"; wasGoodPose = true;
     } else {
@@ -378,13 +303,13 @@ function updateBattle(isGoodPose) {
 
 function finishGame() {
     if (state === "FINISHED") return; state = "FINISHED"; bgm.pause();
-    document.getElementById('boss_bamboo').style.display = "none";
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
+    
+    // 🌟 修正3: 通信のパラメータに &column=AN を追加しました。
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
-        .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message)
-        .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
+        .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message);
 }
 
 function saveVideo() {
