@@ -30,7 +30,15 @@
         #timer { font-size: 55px; font-weight: 900; color: #ff0; text-shadow: 0 0 15px #ff0; transition: color 0.2s, text-shadow 0.2s; line-height: 1; }
         #ng_countdown { font-size: 55px; font-weight: 900; color: #f00; text-shadow: 0 0 15px #f00; line-height: 1; }
 
-        .message-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
+        /* 🌟 メッセージ・歌詞を画面の「真下」へ固定 */
+        .message-container { 
+            position: absolute; 
+            bottom: 30px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            width: 95%; 
+            text-align: center; 
+        }
         
         #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; padding: 0; border: none; background: transparent; }
         .msg-waiting { color: #fff; background: rgba(0,0,0,0.7); border: 3px solid #fff; padding: 10px 30px; }
@@ -42,9 +50,22 @@
             min-height: 1.5em; width: 100%;
         }
 
-        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        #boss_bamboo {
+            position: absolute;
+            width: 150px; 
+            height: auto;
+            transform: translate(-50%, -100%); 
+            display: none; 
+            z-index: 5;
+            pointer-events: none;
+            animation: bounceDance 0.6s infinite alternate cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        @keyframes bounceDance {
+            0% { transform: translate(-50%, -100%) scaleY(0.9); }
+            100% { transform: translate(-50%, -120%) scaleY(1.05); }
+        }
 
-        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); background-size: 30px 30px, 30px 30px, 100% 100%; z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(10,30,40,0.95) 0%, rgba(0,0,0,0.95) 100%); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; text-align: center; }
         .login-input { background: rgba(0,0,0,0.5); border: 2px solid #0ff; color: #fff; font-family: 'Montserrat', sans-serif; font-size: 24px; padding: 12px; text-align: center; width: 85%; max-width: 350px; border-radius: 8px; margin: 10px auto; pointer-events: auto; display: block; }
         .btn { padding: 18px 40px; background: linear-gradient(45deg, #004444, #008888); color: #0ff; border: 2px solid #0ff; border-radius: 8px; font-family: 'Montserrat', sans-serif; font-size: 24px; font-weight: 900; cursor: pointer; margin-top: 25px; width: 85%; max-width: 350px; box-shadow: 0 0 15px rgba(0,255,255,0.4); pointer-events: auto; }
     </style>
@@ -66,6 +87,9 @@
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
+    
+    <img id="boss_bamboo" src="https://i.ibb.co/39Gt3KWN/image.png" alt="魔王バンブー">
+
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
@@ -148,6 +172,7 @@ let pose, camera, videoElement, canvasElement, canvasCtx;
 let state = "SETUP", holdTime = 0, ngTimeStart = null, countdownVal = 3, countdownTimer = null;
 let mediaRecorder, recordedChunks = [], playId = "", playPass = "", smoothedLandmarks = {}, audioCtx, lastNgCount = -1, wasGoodPose = true, showInitialMsg = true;
 
+// jsDelivrのCDN経由で音楽を読み込み
 const bgm = new Audio('https://cdn.jsdelivr.net/gh/stnavi2007-cpu/stnv-music@main/plank_music.mp3');
 bgm.crossOrigin = "anonymous";
 
@@ -183,8 +208,9 @@ function loginAndStart() {
     playPass = document.getElementById('play_pass').value;
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
+    // ブラウザの制限を解除するための事前再生
     playSound('tick');
-    bgm.play().then(() => { bgm.pause(); bgm.currentTime = 0; }).catch(e => console.log(e));
+    bgm.play().then(() => { bgm.pause(); bgm.currentTime = 0; }).catch(e => console.log("BGM Init Error:", e));
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -222,6 +248,9 @@ function onResults(results) {
     canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    
+    const boss = document.getElementById('boss_bamboo');
+
     if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
         const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
@@ -238,12 +267,27 @@ function onResults(results) {
         const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
         let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
+        
+        if (state === "BATTLE" && visOK) {
+            boss.style.display = "block";
+            const renderW = videoElement.clientWidth;
+            const renderH = videoElement.clientHeight;
+            const bossX = (1 - hip.x) * renderW;
+            const bossY = hip.y * renderH;
+            boss.style.left = `${bossX}px`;
+            boss.style.top = `${bossY}px`;
+        } else {
+            boss.style.display = "none";
+        }
+
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(hip.x*w, hip.y*h); canvasCtx.stroke();
         canvasCtx.beginPath(); canvasCtx.moveTo(hip.x*w, hip.y*h); canvasCtx.lineTo(knee.x*w, knee.y*h); canvasCtx.stroke();
         canvasCtx.beginPath(); canvasCtx.moveTo(knee.x*w, knee.y*h); canvasCtx.lineTo(ankle.x*w, ankle.y*h); canvasCtx.stroke();
         processGame(visOK, isL, isH, isV, hAngle, kAngle);
+    } else {
+        boss.style.display = "none";
     }
     canvasCtx.restore();
 }
@@ -267,7 +311,7 @@ function startCountdown() {
     state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
     
-    // ★ 音楽再生を削除 ★
+    // ここからbgm.play()を削除しました！
     
     countdownTimer = setInterval(() => {
         countdownVal--;
@@ -276,14 +320,14 @@ function startCountdown() {
     }, 1000);
 }
 
-function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } state = "SETUP"; }
+function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } bgm.pause(); state = "SETUP"; }
 
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; 
     
-    // ★ カウントが終わり、バトル開始と同時にBGMをスタート！ ★
+    // ★ 3カウントが終わり、バトルが開始したこの瞬間に音楽を流します！
     bgm.currentTime = 0;
-    bgm.play().catch(e => console.log("BGM Error:", e));
+    bgm.play().catch(e => console.log("BGM Play Error:", e));
     
     try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} 
 }
@@ -306,6 +350,7 @@ function updateBattle(isGood) {
 
 function finishGame() {
     if (state === "FINISHED") return; state = "FINISHED"; bgm.pause();
+    document.getElementById('boss_bamboo').style.display = "none";
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
