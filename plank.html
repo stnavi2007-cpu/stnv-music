@@ -76,7 +76,6 @@
             text-shadow: none !important;
             filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.5));
             font-style: italic;
-            /* スマホではみ出ないように可変サイズに修正 */
             font-size: clamp(35px, 8vw, 65px) !important;
             margin-bottom: 5px;
             letter-spacing: 2px;
@@ -143,7 +142,6 @@
             border: none; 
             border-radius: 8px; 
             font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
-            /* ボタンがはみ出ないように可変サイズ＆余白調整 */
             font-size: clamp(16px, 4.5vw, 22px); 
             font-weight: 900; 
             cursor: pointer; 
@@ -282,7 +280,6 @@
             text-shadow: none !important;
             filter: drop-shadow(0 0 20px rgba(255, 179, 71, 0.8));
             font-style: italic;
-            /* 画面幅に収まるよう完全にレスポンシブ化 */
             font-size: clamp(40px, 10vw, 75px) !important;
             margin-bottom: 20px;
         }
@@ -290,7 +287,6 @@
         #result_overlay div[style*="font-size:30px"] {
             background: rgba(0, 0, 0, 0.6);
             border: 1px solid rgba(0, 255, 255, 0.3);
-            /* はみ出さないようにパディングと幅を調整 */
             padding: 15px 20px !important;
             border-radius: 12px;
             box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
@@ -306,7 +302,6 @@
             color: #00ffcc !important;
             text-shadow: 0 0 25px rgba(0, 255, 204, 0.8) !important;
             font-family: 'Montserrat', sans-serif;
-            /* 巨大すぎた数字をスマホ用に調整 */
             font-size: clamp(55px, 13vw, 90px) !important;
             display: inline-block;
             margin: 0 5px;
@@ -576,12 +571,18 @@ function beginBattle() {
 
 function updateBattle(isGood) {
     const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
+    
     if (isGood) {
         if (ngTimeStart) { 
             ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; 
             bgm.play(); // 復帰時に音楽再開
         }
-        holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ffea00"; wasGoodPose = true;
+        
+        // ★★★ 修正箇所：タイマーを音楽の再生時間と完全に同期させる ★★★
+        holdTime = bgm.currentTime; 
+        tD.innerText = holdTime.toFixed(2); 
+        tD.style.color = "#ffea00"; 
+        wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
         tD.style.color = "#ff0055";
