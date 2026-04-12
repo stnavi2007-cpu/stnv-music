@@ -168,10 +168,10 @@ function playSound(type) {
     }
 }
 
-// 🌟 修正1: 歌詞が途中で止まらないように、すべての歌詞を判定するように変更しました。
 function updateLyrics() {
     const ct = bgm.currentTime;
     let text = "";
+    // ★ 修正箇所1: 歌詞が最後までスムーズに更新されるようにロジックを微調整しました
     for (let i = 0; i < LYRICS.length; i++) {
         if (ct >= LYRICS[i].time) {
             text = LYRICS[i].text;
@@ -201,7 +201,7 @@ function initAI() {
     camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
     camera.start().catch(err => { alert("カメラ起動失敗！"); });
     
-    // 🌟 修正2: 曲が終わったら終了（オールコンプリート）になるようにリスナーを追加しました。
+    // ★ 修正箇所2: 音楽が最後まで再生されたら終了画面へ
     bgm.addEventListener('ended', () => { finishGame(); });
 }
 
@@ -307,9 +307,10 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
     
-    // 🌟 修正3: 通信のパラメータに &column=AN を追加しました。
+    // ★ 修正箇所3: スプレッドシートのAN列（column=AN）にデータを送信するようにURLパラメータを修正しました
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
-        .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message);
+        .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message)
+        .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
 }
 
 function saveVideo() {
