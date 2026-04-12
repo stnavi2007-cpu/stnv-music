@@ -30,15 +30,7 @@
         #timer { font-size: 55px; font-weight: 900; color: #ff0; text-shadow: 0 0 15px #ff0; transition: color 0.2s, text-shadow 0.2s; line-height: 1; }
         #ng_countdown { font-size: 55px; font-weight: 900; color: #f00; text-shadow: 0 0 15px #f00; line-height: 1; }
 
-        /* 🌟 メッセージ・歌詞を画面の「真下」へ固定 */
-        .message-container { 
-            position: absolute; 
-            bottom: 30px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            width: 95%; 
-            text-align: center; 
-        }
+        .message-container { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
         
         #msg_area { font-size: 45px; font-weight: 900; border-radius: 15px; text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; transition: 0.3s; display: inline-block; padding: 0; border: none; background: transparent; }
         .msg-waiting { color: #fff; background: rgba(0,0,0,0.7); border: 3px solid #fff; padding: 10px 30px; }
@@ -182,13 +174,7 @@ function playSound(type) {
     const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
     
-    if (type === 'unlock') {
-        // ★ ブラウザの音響制限を解除するための無音再生
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.01);
-    } else if (type === 'buzzer') {
+    if (type === 'buzzer') {
         osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
         osc.start(); osc.stop(audioCtx.currentTime + 0.3);
@@ -214,8 +200,10 @@ function loginAndStart() {
     playPass = document.getElementById('play_pass').value;
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
-    // ★ 音楽はここでは鳴らさず、オーディオのロック解除だけを行う
-    playSound('unlock');
+    // ★ 確実な解決策：ミュート状態で一回再生しておく（スマホのブロック回避）
+    playSound('tick');
+    bgm.volume = 0;
+    bgm.play().catch(e => console.log("BGM Init Error:", e));
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -248,7 +236,6 @@ function smoothPoint(id, p, alpha = 0.15) {
     return smoothedLandmarks[id];
 }
 
-// ★ ここから下、社長の元の判定コードを1ミリも省略せずに完全復活させています！
 function onResults(results) {
     if (canvasElement.width !== results.image.width) { canvasElement.width = results.image.width; canvasElement.height = results.image.height; }
     canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
@@ -350,8 +337,6 @@ function startCountdown() {
     if (countdownTimer) return; state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
     
-    // ★ カウントダウン中は音楽を鳴らしません！
-    
     countdownTimer = setInterval(() => {
         countdownVal--;
         if (countdownVal > 0) { msg.innerText = countdownVal; playSound('tick'); } 
@@ -367,8 +352,9 @@ function cancelCountdown() {
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; 
     
-    // ★ 3カウントが終わり、バトルが開始したこの瞬間にのみ音楽を流します！
+    // ★ 3カウントが終わったこの瞬間に、曲を頭出ししてミュートを解除する！
     bgm.currentTime = 0;
+    bgm.volume = 1;
     bgm.play().catch(e => console.log("BGM Play Error:", e));
     
     try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} 
@@ -396,7 +382,6 @@ function finishGame() {
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
-    // ★ AN列への送信指定
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
         .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message)
         .catch(err => { document.getElementById('save_status').innerText = "通信エラー！"; });
