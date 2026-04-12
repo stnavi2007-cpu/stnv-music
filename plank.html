@@ -184,7 +184,8 @@ function loginAndStart() {
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
     playSound('tick');
-    bgm.play().then(() => { bgm.pause(); bgm.currentTime = 0; }).catch(e => console.log(e));
+    // 音声のブラウザロック解除のみ行い、再生はしない
+    bgm.load();
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
@@ -234,9 +235,9 @@ function onResults(results) {
         const hAngle = calculateAngle(shoulder, hip, knee);
         const kAngle = calculateAngle(hip, knee, ankle);
         
-        // 修正：左右どちらを向いても完璧に反応するように変更
-        const hAngleFloor = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        const isH = hAngleFloor < 35 || hAngleFloor > 145; 
+        // 修正: 左右どちらの向きでも判定できるように絶対角度でチェック
+        const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
+        const isH = angleToHorizontal < 35 || angleToHorizontal > 145;
         
         const isV = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI) > 60;
         const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
@@ -283,6 +284,7 @@ function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer)
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; 
     
+    // カウントダウン終了と同時に音楽再生開始
     bgm.currentTime = 0;
     bgm.play().catch(e => console.log("BGM Error:", e));
     
@@ -291,15 +293,11 @@ function beginBattle() {
 
 function updateBattle(isGood) {
     const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
-    
-    // 修正：曲の最後までやりきった場合の確実な終了判定
-    if (bgm.duration && bgm.currentTime >= bgm.duration - 0.5) {
-        finishGame();
-        return;
-    }
-
     if (isGood) {
-        if (ngTimeStart) { ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; bgm.play(); }
+        if (ngTimeStart) { 
+            ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; 
+            bgm.play(); // 復帰時に音楽再開
+        }
         holdTime += 0.033; tD.innerText = holdTime.toFixed(2); tD.style.color = "#ff0"; wasGoodPose = true;
     } else {
         if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
@@ -318,7 +316,7 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
     
-    // AN列へのデータ送信（元のまま維持）
+    // AN列への送信指定を維持
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
         .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message);
 }
