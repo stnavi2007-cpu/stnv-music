@@ -45,13 +45,12 @@
         /* 🌟 魔王バンブーのデザインとアニメーション */
         #boss_bamboo {
             position: absolute;
-            width: 150px; /* 魔王のサイズ */
+            width: 150px; 
             height: auto;
-            transform: translate(-50%, -100%); /* 基準点を足元の中央に */
-            display: none; /* 最初は隠しておく */
+            transform: translate(-50%, -100%); 
+            display: none; 
             z-index: 5;
             pointer-events: none;
-            /* 踊るアニメーション */
             animation: bounceDance 0.6s infinite alternate cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         @keyframes bounceDance {
@@ -241,7 +240,6 @@ function onResults(results) {
     canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     
-    // 🌟 魔王のエレメントを取得
     const boss = document.getElementById('boss_bamboo');
 
     if (results.poseLandmarks) {
@@ -261,16 +259,12 @@ function onResults(results) {
         let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
         
-        // 🌟 バトル中（プランク中）のみ魔王を出現させ、腰（hip）の座標に追従させる
         if (state === "BATTLE" && visOK) {
             boss.style.display = "block";
-            // 画面の比率に合わせてピクセル座標に変換
             const renderW = videoElement.clientWidth;
             const renderH = videoElement.clientHeight;
-            // 反転しているので (1 - hip.x) で座標を合わせる
             const bossX = (1 - hip.x) * renderW;
             const bossY = hip.y * renderH;
-            
             boss.style.left = `${bossX}px`;
             boss.style.top = `${bossY}px`;
         } else {
@@ -307,6 +301,9 @@ function processGame(visOK, isL, isH, isV, ha, ka) {
 function startCountdown() {
     state = "COUNTDOWN"; countdownVal = 3;
     const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
+    
+    // ★ 音楽再生をここから削除しました ★
+    
     countdownTimer = setInterval(() => {
         countdownVal--;
         if (countdownVal > 0) { msg.innerText = countdownVal; playSound('tick'); } 
@@ -316,7 +313,15 @@ function startCountdown() {
 
 function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } state = "SETUP"; }
 
-function beginBattle() { state = "BATTLE"; holdTime = 0; bgm.play(); try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} }
+function beginBattle() { 
+    state = "BATTLE"; holdTime = 0; 
+    
+    // ★ カウントダウンが終わり、バトル開始と同時にBGMをスタート！ ★
+    bgm.currentTime = 0;
+    bgm.play().catch(e => console.log("BGM Error:", e));
+    
+    try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} 
+}
 
 function updateBattle(isGood) {
     const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
@@ -336,7 +341,7 @@ function updateBattle(isGood) {
 
 function finishGame() {
     if (state === "FINISHED") return; state = "FINISHED"; bgm.pause();
-    document.getElementById('boss_bamboo').style.display = "none"; // 終了時は魔王を消す
+    document.getElementById('boss_bamboo').style.display = "none";
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
