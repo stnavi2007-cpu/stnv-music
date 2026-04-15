@@ -458,7 +458,6 @@ function loginAndStart() {
     if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
     playSound('tick');
-    // 音声のブラウザロック解除のみ行い、再生はしない
     bgm.load();
 
     document.getElementById('start_screen').style.display = 'none';
@@ -474,7 +473,19 @@ function initAI() {
     pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     pose.onResults(onResults);
-    camera = new Camera(videoElement, { onFrame: async () => { await pose.send({image: videoElement}); }, width: 1280, height: 720 });
+    
+    // ▼ 修正箇所: 画面の向き（縦横）に応じてカメラの解像度を動的に設定する ▼
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const camWidth = isPortrait ? 720 : 1280;
+    const camHeight = isPortrait ? 1280 : 720;
+    
+    camera = new Camera(videoElement, { 
+        onFrame: async () => { await pose.send({image: videoElement}); }, 
+        width: camWidth, 
+        height: camHeight 
+    });
+    // ▲ 修正ここまで ▲
+
     camera.start().catch(err => { alert("カメラ起動失敗！"); });
     
     bgm.addEventListener('ended', () => { finishGame(); });
@@ -557,12 +568,10 @@ function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer)
 function beginBattle() { 
     state = "BATTLE"; holdTime = 0; 
     
-    // ★★★修正箇所：カウントダウンの１を確実に消す★★★
     const msg = document.getElementById('msg_area');
     msg.innerText = "";
     msg.className = "";
     
-    // カウントダウン終了と同時に音楽再生開始
     bgm.currentTime = 0;
     bgm.play().catch(e => console.log("BGM Error:", e));
     
@@ -575,10 +584,9 @@ function updateBattle(isGood) {
     if (isGood) {
         if (ngTimeStart) { 
             ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; 
-            bgm.play(); // 復帰時に音楽再開
+            bgm.play(); 
         }
         
-        // ★★★ 修正箇所：タイマーを音楽の再生時間と完全に同期させる ★★★
         holdTime = bgm.currentTime; 
         tD.innerText = holdTime.toFixed(2); 
         tD.style.color = "#ffea00"; 
@@ -600,7 +608,6 @@ function finishGame() {
     document.getElementById('result_overlay').style.display = "flex";
     const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
     
-    // AN列への送信指定を維持
     fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
         .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message);
 }
