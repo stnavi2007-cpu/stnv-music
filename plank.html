@@ -41,7 +41,14 @@
             object-fit: contain; 
         }
         
-        video { display: none; }
+        /* ▼ 修正箇所: videoタグのCSSを変更し、レスポンシブに追従させる ▼ */
+        video { 
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+        /* ▲ 修正ここまで ▲ */
         
         .overlay { 
             position: fixed; 
@@ -474,15 +481,9 @@ function initAI() {
     pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     pose.onResults(onResults);
     
-    // ▼ 修正箇所: 画面の向き（縦横）に応じてカメラの解像度を動的に設定する ▼
-    const isPortrait = window.innerHeight > window.innerWidth;
-    const camWidth = isPortrait ? 720 : 1280;
-    const camHeight = isPortrait ? 1280 : 720;
-    
+    // ▼ 修正箇所: 解像度固定を完全に削除し、カメラにブラウザ側で自動調整させる ▼
     camera = new Camera(videoElement, { 
-        onFrame: async () => { await pose.send({image: videoElement}); }, 
-        width: camWidth, 
-        height: camHeight 
+        onFrame: async () => { await pose.send({image: videoElement}); }
     });
     // ▲ 修正ここまで ▲
 
