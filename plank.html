@@ -521,16 +521,18 @@ function onResults(results) {
         const kAngle = calculateAngle(hip, knee, ankle);
         
         const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        const isH = angleToHorizontal > 55 && angleToHorizontal < 125;
+        /* ▼ 修正：体が水平（0度または180度付近）であることを判定 ▼ */
+        const isH = angleToHorizontal < 45 || angleToHorizontal > 135;
         
+        /* ▼ 修正：腕が垂直（90度付近）であることを判定 ▼ */
         const armAngle = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
-        const isV = armAngle < 30 || armAngle > 150;
+        const isV = armAngle > 45 && armAngle < 135;
         
-        /* ▼ 修正箇所：肩・腰・膝のいずれかが床（肘の高さ）に落ちていたらNG ▼ */
-        const isL = Math.abs(shoulder.x - elbow.x) < 0.08 || Math.abs(hip.x - elbow.x) < 0.08 || Math.abs(knee.x - elbow.x) < 0.08;
+        /* ▼ 修正：肩が一番高く、腰や膝が床（肘）に着いていないか厳密に判定 ▼ */
+        const isL = (shoulder.y < hip.y) || (hip.y - elbow.y < 0.08) || (knee.y - elbow.y < 0.05);
         
-        /* ▼ 修正箇所：155度から160度に厳格化 ▼ */
-        let c = (hAngle < 160 || kAngle < 160 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
+        /* ▼ 修正：体の一直線判定を150度に緩和し、自然な斜めの姿勢を許容 ▼ */
+        let c = (hAngle < 150 || kAngle < 150 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
@@ -543,8 +545,8 @@ function onResults(results) {
 }
 
 function processGame(visOK, isL, isH, isV, ha, ka) {
-    /* ▼ 修正箇所：155度から160度に厳格化 ▼ */
-    const isGood = visOK && !isL && isH && isV && ha >= 160 && ka >= 160;
+    /* ▼ 修正：160度から150度に緩和 ▼ */
+    const isGood = visOK && !isL && isH && isV && ha >= 150 && ka >= 150;
     const msg = document.getElementById('msg_area');
     if (state === "SETUP") {
         msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
