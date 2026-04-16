@@ -30,14 +30,6 @@
             background: #050914; 
             display: none; 
             box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.15); 
-            /* ▼ 修正：コンテナ全体を回転させて横向き対応 ▼ */
-            transform: rotate(90deg);
-            transform-origin: center;
-            width: 100vh;
-            height: 100vw;
-            left: 50%;
-            top: 50%;
-            translate: -50% -50%;
         }
         
         canvas { 
@@ -47,7 +39,7 @@
             width: 100%; 
             height: 100%; 
             /* ▼ 修正：画面いっぱいに広げるために cover に変更 ▼ */
-            object-fit: cover; 
+            object-fit: contain; 
         }
         
         video { 
@@ -55,7 +47,7 @@
             width: 100vw;
             height: 100vh;
             /* ▼ 修正：画面いっぱいに広げるために cover に変更 ▼ */
-            object-fit: cover;
+            object-fit: contain;
         }
         
         .overlay { 
@@ -516,12 +508,7 @@ function onResults(results) {
     canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     if (results.poseLandmarks) {
-        /* ▼ 修正：縦撮影で横たわっている体を認識するため座標を90度回転変換 ▼ */
-        const lm = results.poseLandmarks.map(p => ({
-            x: p.y, 
-            y: 1 - p.x,
-            visibility: p.visibility
-        }));
+        const lm = results.poseLandmarks;
         const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
         const visOK = getV(11,12) > 0.5 && getV(13,14) > 0.5 && getV(23,24) > 0.5 && getV(25,26) > 0.5 && getV(27,28) > 0.5;
         const shoulder = smoothPoint('s', { x: (lm[11].x+lm[12].x)/2, y: (lm[11].y+lm[12].y)/2 });
@@ -539,15 +526,11 @@ function onResults(results) {
         const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
         let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
-        /* ▼ 描画も90度回転した座標系に合わせて修正 ▼ */
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
-        const drawL = (p1, p2) => {
-            canvasCtx.beginPath();
-            canvasCtx.moveTo((1-p1.y)*w, p1.x*h);
-            canvasCtx.lineTo((1-p2.y)*w, p2.x*h);
-            canvasCtx.stroke();
-        };
-        drawL(shoulder, elbow); drawL(shoulder, hip); drawL(hip, knee); drawL(knee, ankle);
+        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(hip.x*w, hip.y*h); canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(hip.x*w, hip.y*h); canvasCtx.lineTo(knee.x*w, knee.y*h); canvasCtx.stroke();
+        canvasCtx.beginPath(); canvasCtx.moveTo(knee.x*w, knee.y*h); canvasCtx.lineTo(ankle.x*w, ankle.y*h); canvasCtx.stroke();
         processGame(visOK, isL, isH, isV, hAngle, kAngle);
     }
     canvasCtx.restore();
