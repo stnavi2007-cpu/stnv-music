@@ -30,6 +30,14 @@
             background: #050914; 
             display: none; 
             box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.15); 
+            /* ▼ 修正：コンテナ全体を回転させて横向き対応 ▼ */
+            transform: rotate(90deg);
+            transform-origin: center;
+            width: 100vh;
+            height: 100vw;
+            left: 50%;
+            top: 50%;
+            translate: -50% -50%;
         }
         
         canvas { 
@@ -181,7 +189,7 @@
         /* ---------------------------------------------------
            GAME HUD (UI LAYER)
         --------------------------------------------------- */
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100vh; height: 100vw; transform-origin: top left; transform: rotate(90deg) translateY(-100%); pointer-events: none; z-index: 10; display: block; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: block; }
         
         .header { display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; left: 0; padding: 0 5%; box-sizing: border-box; }
         
@@ -280,8 +288,6 @@
         /* ---------------------------------------------------
            RESULT SCREEN
         --------------------------------------------------- */
-        #result_overlay_content { transform: rotate(90deg); display: flex; flex-direction: column; align-items: center; width: 100vh; }
-        
         #result_overlay h1 {
             color: transparent !important;
             background: linear-gradient(135deg, #f6d365 0%, #ffb347 100%) !important;
@@ -368,13 +374,11 @@
 </div>
 
 <div id="result_overlay" class="overlay" style="display:none;">
-    <div id="result_overlay_content">
-        <h1 style="color:#ffd700; text-shadow: 0 0 20px #ffd700; font-size: 60px;">ALL COMPLETE!!</h1>
-        <div style="font-size:30px; font-weight: bold;">耐えた時間：<span id="final_score" style="color:#0f0; font-size:70px;">0</span> 秒</div>
-        <div id="save_status" style="color:#0ff; margin-bottom:30px;">データ送信中...</div>
-        <a id="download_link">🎥 動画をダウンロード</a>
-        <button class="btn" onclick="location.reload()">もう一度挑戦</button>
-    </div>
+    <h1 style="color:#ffd700; text-shadow: 0 0 20px #ffd700; font-size: 60px;">ALL COMPLETE!!</h1>
+    <div style="font-size:30px; font-weight: bold;">耐えた時間：<span id="final_score" style="color:#0f0; font-size:70px;">0</span> 秒</div>
+    <div id="save_status" style="color:#0ff; margin-bottom:30px;">データ送信中...</div>
+    <a id="download_link">🎥 動画をダウンロード</a>
+    <button class="btn" onclick="location.reload()">もう一度挑戦</button>
 </div>
 
 <script>
@@ -486,8 +490,7 @@ function initAI() {
     pose.onResults(onResults);
     
     camera = new Camera(videoElement, { 
-        onFrame: async () => { await pose.send({image: videoElement}); },
-        width: { ideal: 720 }, height: { ideal: 1280 }
+        onFrame: async () => { await pose.send({image: videoElement}); }
     });
 
     camera.start().catch(err => { alert("カメラ起動失敗！"); });
@@ -513,7 +516,12 @@ function onResults(results) {
     canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
     if (results.poseLandmarks) {
-        const lm = results.poseLandmarks;
+        /* ▼ 修正：縦撮影で横たわっている体を認識するため座標を90度回転変換 ▼ */
+        const lm = results.poseLandmarks.map(p => ({
+            x: p.y, 
+            y: 1 - p.x,
+            visibility: p.visibility
+        }));
         const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
         const visOK = getV(11,12) > 0.5 && getV(13,14) > 0.5 && getV(23,24) > 0.5 && getV(25,26) > 0.5 && getV(27,28) > 0.5;
         const shoulder = smoothPoint('s', { x: (lm[11].x+lm[12].x)/2, y: (lm[11].y+lm[12].y)/2 });
@@ -525,18 +533,21 @@ function onResults(results) {
         const kAngle = calculateAngle(hip, knee, ankle);
         
         const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        const isH = Math.abs(angleToHorizontal - 90) < 35;
+        const isH = angleToHorizontal < 35 || angleToHorizontal > 145;
         
-        const angleToVertical = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
-        const isV = angleToVertical < 30 || angleToVertical > 150;
-        const isL = Math.abs(shoulder.x - elbow.x) < 0.08;
+        const isV = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI) > 60;
+        const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
         let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
+        /* ▼ 描画も90度回転した座標系に合わせて修正 ▼ */
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
-        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(hip.x*w, hip.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(hip.x*w, hip.y*h); canvasCtx.lineTo(knee.x*w, knee.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(knee.x*w, knee.y*h); canvasCtx.lineTo(ankle.x*w, ankle.y*h); canvasCtx.stroke();
+        const drawL = (p1, p2) => {
+            canvasCtx.beginPath();
+            canvasCtx.moveTo((1-p1.y)*w, p1.x*h);
+            canvasCtx.lineTo((1-p2.y)*w, p2.x*h);
+            canvasCtx.stroke();
+        };
+        drawL(shoulder, elbow); drawL(shoulder, hip); drawL(hip, knee); drawL(knee, ankle);
         processGame(visOK, isL, isH, isV, hAngle, kAngle);
     }
     canvasCtx.restore();
