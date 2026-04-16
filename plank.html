@@ -3,33 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>STNV AI PLANK</title>
+    <title>STNV AR SQUATS QUEST</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Noto+Sans+JP:wght@700;900&display=swap');
-        
-        /* ---------------------------------------------------
-           GLOBAL & BACKGROUND
-        --------------------------------------------------- */
-        body { 
-            background: #000; 
-            color: #fff; 
-            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
-            margin: 0; 
-            overflow: hidden; 
-            text-align: center; 
-            touch-action: manipulation; 
-        }
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        body { background: #000; color: #fff; font-family: 'DotGothic16', sans-serif; margin: 0; overflow: hidden; text-align: center; }
         
         #video_container { 
             position: relative; 
             width: 100vw; 
             height: 100vh; 
-            background: #050914; 
+            background: #000; 
             display: none; 
-            box-shadow: inset 0 0 100px rgba(0, 255, 255, 0.15); 
         }
         
         canvas { 
@@ -38,17 +25,60 @@
             left: 0; 
             width: 100%; 
             height: 100%; 
-            /* ▼ 修正：画面いっぱいに広げるために cover に変更 ▼ */
-            object-fit: cover; 
+            object-fit: contain; 
+            transform: scaleX(-1); 
         }
         
-        video { 
+        video { display: none; }
+        
+        /* 🌟 人型点線ガイドも90度回転させて配置 🌟 */
+        #body_guide {
+            position: absolute;
+            top: 50%; 
+            left: 5%; /* 画面の左側（横置き時の下部）に配置 */
+            transform: translateY(-50%) rotate(90deg); /* 90度回転 */
+            width: 50vh; /* 縦横の基準が逆になるためvh/vwを調整 */
+            height: 50vw;
+            opacity: 0.5;
+            pointer-events: none;
+            z-index: 5;
             display: none;
-            width: 100vw;
-            height: 100vh;
-            /* ▼ 修正：画面いっぱいに広げるために cover に変更 ▼ */
-            object-fit: cover;
         }
+
+        /* 🌟 UIレイヤー全体を90度回転 🌟 */
+        .ui-layer { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            /* 画面サイズに合わせて縦横を逆転させる */
+            width: 100vh; 
+            height: 100vw; 
+            /* 左上を基準に90度回転させ、画面内に収める */
+            transform-origin: top left;
+            transform: rotate(90deg) translateY(-100%);
+            
+            pointer-events: none; 
+            z-index: 10; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; }
+        
+        .status-box { 
+            background: rgba(0,0,0,0.3); 
+            border: 2px solid rgba(0,255,255,0.5); 
+            padding: 10px; 
+            border-radius: 10px; 
+            min-width: 100px; 
+            box-shadow: 0 0 10px rgba(0,255,255,0.5); 
+        }
+        
+        #score_display { font-size: 40px; color: #0f0; text-shadow: 0 0 10px #0f0; font-weight: bold; }
+        #time_display { font-size: 40px; color: #ff0; text-shadow: 0 0 10px #ff0; font-weight: bold; }
         
         .overlay { 
             position: fixed; 
@@ -56,13 +86,7 @@
             left: 0; 
             width: 100%; 
             height: 100%; 
-            background-color: #050914;
-            background-image: 
-                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), 
-                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px), 
-                radial-gradient(circle at center, rgba(0, 40, 60, 0.8) 0%, rgba(0, 0, 0, 0.95) 100%); 
-            background-size: 40px 40px, 40px 40px, 100% 100%; 
-            background-position: center center;
+            background: rgba(0,0,0,0.95); 
             z-index: 100; 
             display: flex; 
             flex-direction: column; 
@@ -73,550 +97,487 @@
             text-align: center; 
         }
 
-        /* ---------------------------------------------------
-           START SCREEN
-        --------------------------------------------------- */
-        #start_screen h1 {
-            color: transparent !important;
-            background: linear-gradient(135deg, #00ffff 0%, #0066ff 100%) !important;
-            -webkit-background-clip: text !important;
-            text-shadow: none !important;
-            filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.5));
-            font-style: italic;
-            font-size: clamp(35px, 8vw, 65px) !important;
-            margin-bottom: 5px;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        #start_screen p {
-            color: #b3e5fc !important;
-            letter-spacing: 1px;
-            margin-bottom: 30px;
-            font-size: clamp(14px, 4vw, 18px) !important;
-        }
-
-        #start_screen div[style*="background"] {
-            background: rgba(0, 15, 25, 0.6) !important;
-            border: 1px solid rgba(0, 255, 255, 0.2) !important;
-            border-left: 4px solid #00ffff !important;
-            border-radius: 8px;
-            box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 15px !important;
-            line-height: 1.6;
-            color: #e0f7fa;
+        /* スタート画面などは回転させない（スマホを縦に持って操作するため） */
+        .btn { padding: 15px 30px; background: #f00; color: #fff; border: 2px solid #fff; border-radius: 10px; font-family: 'DotGothic16'; font-size: 20px; cursor: pointer; margin-top: 15px; width: 85%; max-width: 300px; box-shadow: 0 4px #900; pointer-events: auto; }
+        .btn:active { transform: translateY(4px); box-shadow: 0 0 #900; }
+        input { width: 80%; max-width: 300px; padding: 12px; margin: 5px 0; background: #222; color: #fff; border: 1px solid #0ff; text-align: center; font-family: 'DotGothic16'; border-radius: 5px; font-size: 16px; pointer-events: auto; }
+        
+        #download_link { background: #0ff; color: #000; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: bold; margin-top: 20px; pointer-events: auto; display: none; }
+        
+        #center_message, #warning_message {
+            position: absolute; 
+            top: 40%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            font-size: 24px; 
             width: 90%;
-            max-width: 400px;
-            font-size: clamp(12px, 3.5vw, 16px) !important;
-            box-sizing: border-box;
+            text-align: center;
+            white-space: normal; 
+            z-index: 50; 
+            pointer-events: none; 
+            font-weight: bold;
         }
 
-        /* ---------------------------------------------------
-           INPUTS & BUTTONS
-        --------------------------------------------------- */
-        .login-input { 
-            background: rgba(0, 10, 20, 0.7); 
-            border: 1px solid rgba(0, 255, 255, 0.3); 
-            border-radius: 8px;
+        #center_message {
+            display: none; 
             color: #fff; 
-            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
-            font-size: clamp(16px, 4vw, 20px); 
-            padding: 15px; 
-            text-align: center; 
-            width: 90%; 
-            max-width: 350px; 
-            margin: 10px auto; 
-            pointer-events: auto; 
-            display: block; 
-            transition: all 0.3s ease;
-            box-shadow: inset 0 0 10px rgba(0,255,255,0.05);
-            box-sizing: border-box;
-        }
-        
-        .login-input:focus {
-            outline: none;
-            border-color: #00ffff;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4), inset 0 0 10px rgba(0, 255, 255, 0.2);
-            background: rgba(0, 20, 40, 0.8);
+            text-shadow: 0 0 10px #0ff; 
+            transition: font-size 0.2s ease;
         }
 
-        .login-input::placeholder { color: rgba(0, 255, 255, 0.4); }
-
-        .btn, #download_link { 
-            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); 
-            color: #000; 
-            border: none; 
-            border-radius: 8px; 
-            font-family: 'Montserrat', 'Noto Sans JP', sans-serif; 
-            font-size: clamp(16px, 4.5vw, 22px); 
-            font-weight: 900; 
-            cursor: pointer; 
-            margin: 12px auto;
-            padding: 15px 20px; 
-            width: 90%; 
-            max-width: 320px; 
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4); 
-            pointer-events: auto; 
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            text-decoration: none;
-            box-sizing: border-box;
-            display: inline-block;
-        }
-        
-        #download_link { display: none; text-align: center; }
-
-        .btn:hover, #download_link:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.7);
-        }
-        
-        .btn:active, #download_link:active {
-            transform: scale(0.98);
-            box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+        #warning_message {
+            display: none; 
+            color: #f00; 
+            text-shadow: 0 0 10px #fff; 
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 10px;
+            border: 2px solid #f00;
         }
 
-        /* ---------------------------------------------------
-           GAME HUD (UI LAYER)
-        --------------------------------------------------- */
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: block; }
-        
-        .header { display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; left: 0; padding: 0 5%; box-sizing: border-box; }
-        
-        .status-box { 
-            background: rgba(0, 15, 25, 0.7); 
-            border: 1px solid rgba(0, 255, 255, 0.2); 
-            border-top: 4px solid #00ffff;
-            padding: 10px 15px; 
-            border-radius: 12px; 
-            min-width: 120px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(0,255,255,0.15); 
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-        
-        .status-title { 
-            font-size: clamp(10px, 3vw, 14px); 
-            color: #80deea; 
-            font-weight: 900; 
-            letter-spacing: 2px; 
-            margin-bottom: 5px; 
-            text-transform: uppercase;
-        }
-        
-        #timer { 
-            font-family: 'Montserrat', sans-serif;
-            font-size: clamp(35px, 8vw, 60px); 
-            font-weight: 900; 
-            color: #ffea00; 
-            text-shadow: 0 0 20px rgba(255, 234, 0, 0.6); 
-            transition: color 0.2s, text-shadow 0.2s; 
-            line-height: 1; 
-        }
-        
-        #ng_countdown { 
-            font-family: 'Montserrat', sans-serif;
-            font-size: clamp(35px, 8vw, 60px); 
-            font-weight: 900; 
-            color: #ff0055; 
-            text-shadow: 0 0 20px rgba(255, 0, 85, 0.6); 
-            line-height: 1; 
-        }
-
-        #ng_label { color: #ff0055 !important; }
-
-        /* ---------------------------------------------------
-           MESSAGES & LYRICS
-        --------------------------------------------------- */
-        .message-container { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 95%; text-align: center; }
-        
-        #msg_area { 
-            font-size: clamp(24px, 6vw, 40px); 
-            font-weight: 900; 
-            border-radius: 15px; 
-            text-shadow: 2px 2px 0 #000, 0 0 20px currentColor; 
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
-            display: inline-block; 
-            padding: 0; 
-            border: none; 
-            background: transparent; 
-        }
-        
-        .msg-waiting { 
-            color: #00ffff; 
-            background: rgba(0, 20, 30, 0.8) !important; 
-            border: 2px solid rgba(0, 255, 255, 0.5) !important; 
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
-            backdrop-filter: blur(8px);
-            padding: 10px 20px !important; 
-        }
-        
-        .msg-countdown { 
-            color: #ffea00; 
-            background: rgba(255, 234, 0, 0.15) !important; 
-            border: 3px solid #ffea00 !important; 
-            box-shadow: 0 0 40px rgba(255, 234, 0, 0.4);
-            backdrop-filter: blur(8px);
-            font-size: clamp(60px, 15vw, 100px) !important; 
-            padding: 15px 40px !important; 
-            border-radius: 20px !important;
-        }
-        
-        #lyrics_area { 
-            font-size: clamp(20px, 5vw, 38px); 
-            color: #ffffff; 
-            font-weight: 900; 
-            text-shadow: 0 0 10px #000, 0 0 20px #000, 0 0 30px rgba(0, 255, 255, 0.8); 
-            min-height: 1.5em; 
-            width: 100%;
-            margin-top: 15px;
-            letter-spacing: 1px;
-        }
-
-        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-
-        /* ---------------------------------------------------
-           RESULT SCREEN
-        --------------------------------------------------- */
-        #result_overlay h1 {
-            color: transparent !important;
-            background: linear-gradient(135deg, #f6d365 0%, #ffb347 100%) !important;
-            -webkit-background-clip: text !important;
-            text-shadow: none !important;
-            filter: drop-shadow(0 0 20px rgba(255, 179, 71, 0.8));
-            font-style: italic;
-            font-size: clamp(40px, 10vw, 75px) !important;
-            margin-bottom: 20px;
-        }
-
-        #result_overlay div[style*="font-size:30px"] {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            padding: 15px 20px !important;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            margin-bottom: 20px;
-            width: 90%;
-            max-width: 400px;
-            box-sizing: border-box;
-            font-size: clamp(20px, 5vw, 30px) !important;
-        }
-
-        #final_score {
-            color: #00ffcc !important;
-            text-shadow: 0 0 25px rgba(0, 255, 204, 0.8) !important;
-            font-family: 'Montserrat', sans-serif;
-            font-size: clamp(55px, 13vw, 90px) !important;
-            display: inline-block;
-            margin: 0 5px;
-        }
-
-        #save_status {
-            font-size: clamp(14px, 4vw, 18px);
-            letter-spacing: 1px;
-            background: rgba(0, 255, 255, 0.1);
-            padding: 10px 20px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-top: 10px;
-            margin-bottom: 20px !important;
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            width: 90%;
-            max-width: 350px;
-            box-sizing: border-box;
+        /* 🌟 リザルト画面も90度回転 🌟 */
+        #result_overlay_content {
+            transform: rotate(90deg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
     </style>
 </head>
 <body>
 
 <div id="start_screen" class="overlay">
-    <h1 style="color:#0ff; text-shadow: 0 0 15px #0ff; font-size: 50px;">PLANK BATTLE</h1>
-    <p style="color:#fff; font-size:18px;">己の限界に挑戦しよう！</p>
-    <div style="background: rgba(0,255,255,0.1); padding: 15px; border: 1px solid #0ff; border-radius: 8px; margin-bottom: 25px; font-size: 16px;">
-        ⚠️ カメラを「許可」をしてね！<br>
-        ⚠️ 服はインして、体のラインが見やすい服で真横から全身が映るように撮影してね！
+    <h1 style="color:#ffd700; text-shadow: 2px 2px #f00; margin-bottom: 5px;">🔥 AR SQUATS QUEST 🔥</h1>
+    <p style="color:#0ff; font-size:14px; margin-top:0;">１枚でも多くのコインをタップ！</p>
+    <div style="background: rgba(255,0,0,0.2); padding: 10px; border: 1px solid #f00; border-radius: 5px; margin-bottom: 15px; font-size: 12px; text-align:left;">
+        ⚠️ <strong>スマホを横に向けて</strong>、壁に立てかけてね！<br>
+        （画面の文字が正しく読める向きにセットしてね）
     </div>
-    <input type="text" id="play_id" class="login-input" placeholder="ダンサーID">
-    <input type="password" id="play_pass" class="login-input" placeholder="パスワード">
-    <button class="btn" onclick="loginAndStart()">TRAINING START</button>
+    <input type="text" id="play_id" placeholder="ダンサーID">
+    <input type="password" id="play_pass" placeholder="パスワード">
+    <button class="btn" onclick="loginAndStart()">カメラ起動 ＆ スクワット開始</button>
 </div>
 
 <div id="video_container">
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
+    
+    <img id="body_guide" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 200'%3E%3Ccircle cx='50' cy='25' r='15' fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' /%3E%3Cpath fill='none' stroke='%230ff' stroke-width='2' stroke-dasharray='4,4' stroke-linejoin='round' d='M 35 40 L 65 40 L 85 90 L 75 100 L 65 60 L 65 110 L 70 190 L 55 190 L 50 120 L 45 190 L 30 190 L 35 110 L 35 60 L 25 100 L 15 90 Z' /%3E%3C/svg%3E">
+
     <div class="ui-layer">
         <div class="header">
             <div class="status-box">
-                <div class="status-title">HOLDING TIME</div>
-                <div id="timer">0.00</div>
+                <div style="font-size:12px; color:#ccc;">COIN GET</div>
+                <div id="score_display">0</div>
             </div>
             <div class="status-box">
-                <div class="status-title" id="ng_label" style="color:#f00; display:none;">NG: LIMIT 5s</div>
-                <div id="ng_countdown"></div>
+                <div style="font-size:12px; color:#ccc;">TIME LIMIT</div>
+                <div id="time_display">90</div>
             </div>
         </div>
-        <div class="message-container">
-            <div id="msg_area"></div>
-            <div id="lyrics_area"></div>
-        </div>
+        
+        <div id="center_message" style="position:relative; top:auto; left:auto; transform:none; margin: auto;">全身を枠に入れて！</div>
+        <div id="warning_message" style="position:relative; top:auto; left:auto; transform:none; margin: auto;">前に出すぎ！元の位置に下がれ！</div>
     </div>
 </div>
 
 <div id="result_overlay" class="overlay" style="display:none;">
-    <h1 style="color:#ffd700; text-shadow: 0 0 20px #ffd700; font-size: 60px;">ALL COMPLETE!!</h1>
-    <div style="font-size:30px; font-weight: bold;">耐えた時間：<span id="final_score" style="color:#0f0; font-size:70px;">0</span> 秒</div>
-    <div id="save_status" style="color:#0ff; margin-bottom:30px;">データ送信中...</div>
-    <a id="download_link">🎥 動画をダウンロード</a>
-    <button class="btn" onclick="location.reload()">もう一度挑戦</button>
+    <div id="result_overlay_content">
+        <h1 style="color:#ffd700; text-shadow: 0 0 10px #f00;">QUEST FINISHED!!</h1>
+        <div style="font-size:24px; margin-bottom:10px;">獲得したコイン：<span id="final_score" style="color:#0f0; font-size:50px;">0</span> 枚</div>
+        <div id="save_status" style="color:#0ff; margin-bottom:20px;">データ送信中...</div>
+        
+        <p style="font-size:14px; color:#ccc;">👇 今回の記録を動画に保存してギルドに提出せよ！</p>
+        <a id="download_link" class="btn" style="background:#0ff; color:#000; border-color:#fff;">🎥 スクワット動画を保存</a>
+        
+        <button class="btn" style="background:#333; border-color:#777; margin-top:30px;" onclick="location.reload()">もう一度挑戦</button>
+    </div>
 </div>
 
 <script>
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxlfASNPpPyVwYXdB6kamPVNrXfbI9MTqcBvuVeP54itKd7_n5sj90k4rSfkf7EJUV0/exec";
 
-const LYRICS = [
-    { time: 0, text: "位置につけー！" },
-    { time: 8, text: "ふるえるスマホか　おれの腹か" },
-    { time: 11, text: "バイブス高まり　床とランデブー" },
-    { time: 14, text: "畳の目が　銀河にみえて" },
-    { time: 18, text: "汗がポタポタ　ダムが決壊" },
-    { time: 21, text: "「いま、なんびょう？」って聞きたいけれど" },
-    { time: 24, text: "声を出したら　すべてが終わる" },
-    { time: 30, text: "筋肉痛は　明日への通知表" },
-    { time: 36, text: "腹直筋が　「もう無理」と泣いている" },
-    { time: 42, text: "だが知っているか？　プランクの語源は" },
-    { time: 49, text: "「床に恋した　一枚の板」なんだぜ？" },
-    { time: 55, text: "プランク・パニック！　体幹・レボリューション！" },
-    { time: 58, text: "重力にケンカを売る　おれは人間まな板" },
-    { time: 67, text: "固めろコルセット　内臓を守れ" }, 
-    { time: 71, text: "この苦しみを越えたら　腹筋で大根が" }, 
-    { time: 76, text: "おろせる未来が　待っているはずさ！" }, 
-    { time: 84, text: "時計の針が　癒着したのか" }, 
-    { time: 87, text: "さっきから10秒が　100年経過" },
-    { time: 90, text: "プルプルプルと　子鹿の産まれたて" },
-    { time: 93, text: "産まれた場所は　ヨガマットの上" },
-    { time: 97, text: "肘の皮が　悲鳴をあげても" },
-    { time: 102, text: "心はいま　エベレストの頂上" },
-    { time: 108, text: "代謝があがれば　冬でも暖房いらず" },
-    { time: 114, text: "腹筋の溝に　貯金もできる" },
-    { time: 120, text: "乗り越えた先には　シックスパックの要塞" },
-    { time: 126, text: "洗濯板として　町内に貸し出すのさ" },
-    { time: 134, text: "プランク・パニック！　体幹・レボリューション！" },
-    { time: 137, text: "地球の軸を支える　おれは人間定規" },
-    { time: 145, text: "締めろインナーマッスル　魂を燃やせ" },
-    { time: 149, text: "この辛さを越えたら　腹筋が反射して" },
-    { time: 155, text: "街灯代わりになる　明るい未来さ！" },
-    { time: 162, text: "ああ…　なぜおれは　浮いているのか" },
-    { time: 165, text: "四足歩行の　先祖に謝りたい" },
-    { time: 169, text: "おしりを上げるな　腰を下げるな" },
-    { time: 173, text: "おれはいま　宇宙と一体化している…" },
-    { time: 178, text: "しーっ…　聞こえるかい？" },
-    { time: 180, text: "腹筋たちが　合唱を始めたよ" },
-    { time: 183, text: "「熱いよ…」「痛いよ…」「降ろしてよ…」" },
-    { time: 186, text: "それは　産声という名の　メロディ…" },
-    { time: 192, text: "プランク・パニック！　体幹・レボリューション！" },
-    { time: 195, text: "銀河系で一番　真っ直ぐなヤツ！" },
-    { time: 203, text: "ラスト10秒は　光の速さを超えろ！" },
-    { time: 208, text: "この震えが止まれば　君の腹筋はもう" },
-    { time: 214, text: "ダイヤモンドより硬い　最強の武器になる！" },
-    { time: 219, text: "明るい未来へ　レッツ・ゴー・ホリゾンタル！" },
-    { time: 231, text: "あぁっ…" }
-];
-
 let pose, camera, videoElement, canvasElement, canvasCtx;
-let state = "SETUP", holdTime = 0, ngTimeStart = null, countdownVal = 3, countdownTimer = null;
-let mediaRecorder, recordedChunks = [], playId = "", playPass = "", smoothedLandmarks = {}, audioCtx, lastNgCount = -1, wasGoodPose = true, showInitialMsg = true;
+let gameState = "SETUP"; 
+let score = 0;
+let timeLeft = 90; 
+let timerInterval;
+let countdownValue = 5;
+let countdownTimer;
 
-const bgm = new Audio('https://cdn.jsdelivr.net/gh/stnavi2007-cpu/stnv-music@main/plank_music.mp3');
-bgm.crossOrigin = "anonymous";
+let mediaRecorder, recordedChunks = [];
+let videoExtension = 'mp4'; 
+let videoMimeType = '';
 
-function playSound(type) {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    if (type === 'buzzer') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'tick') {
-        osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+// 🌟 X/Yの概念が逆転するので、ターゲットの位置も調整
+let target = { x: 0.5, y: 0.5, radius: 0.06, active: false };
+let playId = "", playPass = "";
+let spawnTop = true; 
+
+let baseShoulderWidth = 0;
+let isTooClose = false;
+
+let audioCtx;
+let bgmInterval;
+let beatStep = 0;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
 }
 
-function updateLyrics() {
-    const ct = bgm.currentTime;
-    let text = "";
-    for (let i = 0; i < LYRICS.length; i++) {
-        if (ct >= LYRICS[i].time) text = LYRICS[i].text;
-        else break;
-    }
-    document.getElementById('lyrics_area').innerText = text;
+function playCoinSound() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); 
+    osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); 
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.3);
+}
+
+function playKick() {
+    if(!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function playHat() {
+    if(!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(5000, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.05);
+}
+
+function startBGM() {
+    beatStep = 0;
+    bgmInterval = setInterval(() => {
+        if (gameState === "PLAYING" && !isTooClose) {
+            if (beatStep % 4 === 0) playKick();
+            if (beatStep % 4 === 2) playHat();  
+            beatStep++;
+        }
+    }, 125); 
 }
 
 function loginAndStart() {
     playId = document.getElementById('play_id').value;
     playPass = document.getElementById('play_pass').value;
-    if(!playId || !playPass) { alert("IDとパスワードを入れてね！"); return; }
     
-    playSound('tick');
-    bgm.load();
+    if(!playId || !playPass) { alert("IDとパスワードを入れてくれ！"); return; }
+
+    initAudio(); 
 
     document.getElementById('start_screen').style.display = 'none';
     document.getElementById('video_container').style.display = 'block';
-    initAI(); 
+
+    initAI();
 }
 
 function initAI() {
     videoElement = document.getElementById('input_video');
     canvasElement = document.getElementById('output_canvas');
     canvasCtx = canvasElement.getContext('2d');
-    setTimeout(() => { showInitialMsg = false; }, 6000);
-    pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-    pose.onResults(onResults);
-    
-    camera = new Camera(videoElement, { 
-        onFrame: async () => { await pose.send({image: videoElement}); }
+
+    pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
-
-    camera.start().catch(err => { alert("カメラ起動失敗！"); });
     
-    bgm.addEventListener('ended', () => { finishGame(); });
+    pose.setOptions({ 
+        modelComplexity: 0, 
+        smoothLandmarks: true, 
+        minDetectionConfidence: 0.5, 
+        minTrackingConfidence: 0.5 
+    });
+    pose.onResults(onResults);
+
+    camera = new Camera(videoElement, {
+        onFrame: async () => { await pose.send({image: videoElement}); },
+        // 縦画面（Portrait）としてカメラを起動する
+        width: { ideal: 720 }, height: { ideal: 1280 }
+    });
+    
+    camera.start().then(() => {
+        gameState = "CALIBRATING";
+        document.getElementById('body_guide').style.display = 'block';
+        const msg = document.getElementById('center_message');
+        msg.style.display = 'block';
+        msg.style.fontSize = "24px";
+        msg.innerText = "全身を枠に入れて！";
+    }).catch(err => {
+        alert("カメラの起動に失敗しました。ブラウザの再読み込みをして、カメラを許可してください！");
+    });
 }
 
-function calculateAngle(a, b, c) {
-    let rad = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-    let deg = Math.abs(rad * 180.0 / Math.PI);
-    return deg > 180.0 ? 360.0 - deg : deg;
-}
+function spawnTarget() {
+    // 🌟 X軸とY軸の意味が逆転します。
+    // カメラ（縦）のX軸 = ユーザー（横置き）から見た上下
+    // カメラ（縦）のY軸 = ユーザー（横置き）から見た左右
+    
+    // ユーザーから見て左右方向（カメラのY軸）
+    target.y = 0.1 + Math.random() * 0.8; 
+    
+    if (Math.random() < 0.7) {
+        spawnTop = !spawnTop; 
+    } else {
+        spawnTop = Math.random() < 0.5;
+    }
 
-function smoothPoint(id, p, alpha = 0.15) {
-    if (!smoothedLandmarks[id]) smoothedLandmarks[id] = { x: p.x, y: p.y };
-    else { smoothedLandmarks[id].x = smoothedLandmarks[id].x * (1 - alpha) + p.x * alpha; smoothedLandmarks[id].y = smoothedLandmarks[id].y * (1 - alpha) + p.y * alpha; }
-    return smoothedLandmarks[id];
+    if (spawnTop) {
+        // ユーザーから見て上（カメラの右側 = Xが大きい）
+        target.x = 0.75 + Math.random() * 0.15; 
+    } else {
+        // ユーザーから見て下（カメラの左側 = Xが小さい）
+        target.x = 0.15 + Math.random() * 0.15; 
+    }
+    
+    target.active = true;
 }
 
 function onResults(results) {
-    if (canvasElement.width !== results.image.width) { canvasElement.width = results.image.width; canvasElement.height = results.image.height; }
-    canvasCtx.save(); canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    if (results.poseLandmarks) {
-        const lm = results.poseLandmarks;
-        const getV = (i1, i2) => Math.max(lm[i1].visibility, lm[i2].visibility);
-        const visOK = getV(11,12) > 0.5 && getV(13,14) > 0.5 && getV(23,24) > 0.5 && getV(25,26) > 0.5 && getV(27,28) > 0.5;
-        const shoulder = smoothPoint('s', { x: (lm[11].x+lm[12].x)/2, y: (lm[11].y+lm[12].y)/2 });
-        const elbow = smoothPoint('e', { x: (lm[13].x+lm[14].x)/2, y: (lm[13].y+lm[14].y)/2 });
-        const hip = smoothPoint('h', { x: (lm[23].x+lm[24].x)/2, y: (lm[23].y+lm[24].y)/2 });
-        const knee = smoothPoint('k', { x: (lm[25].x+lm[26].x)/2, y: (lm[25].y+lm[26].y)/2 });
-        const ankle = smoothPoint('a', { x: (lm[27].x+lm[28].x)/2, y: (lm[27].y+lm[28].y)/2 });
-        const hAngle = calculateAngle(shoulder, hip, knee);
-        const kAngle = calculateAngle(hip, knee, ankle);
-        
-        const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        const isH = angleToHorizontal < 35 || angleToHorizontal > 145;
-        
-        const isV = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI) > 60;
-        const isL = Math.abs(shoulder.y - elbow.y) < 0.08;
-        let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
-        const w = canvasElement.width, h = canvasElement.height;
-        canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
-        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(hip.x*w, hip.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(hip.x*w, hip.y*h); canvasCtx.lineTo(knee.x*w, knee.y*h); canvasCtx.stroke();
-        canvasCtx.beginPath(); canvasCtx.moveTo(knee.x*w, knee.y*h); canvasCtx.lineTo(ankle.x*w, ankle.y*h); canvasCtx.stroke();
-        processGame(visOK, isL, isH, isV, hAngle, kAngle);
+    if (canvasElement.width !== results.image.width) {
+        canvasElement.width = results.image.width;
+        canvasElement.height = results.image.height;
     }
+
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    // カメラ画像をそのまま描画（キャンバス自体は回転させない）
+    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+    
+    if (results.poseLandmarks) {
+        const trackedPoints = [15, 16];
+        canvasCtx.fillStyle = '#FF0000';
+        trackedPoints.forEach(idx => {
+            const pt = results.poseLandmarks[idx];
+            if (pt && pt.visibility > 0.5) {
+                canvasCtx.beginPath();
+                canvasCtx.arc(pt.x * canvasElement.width, pt.y * canvasElement.height, 12, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            }
+        });
+        
+        processGame(results.poseLandmarks);
+    }
+    
+    if (target.active && gameState === "PLAYING") {
+        const px = target.x * canvasElement.width;
+        const py = target.y * canvasElement.height;
+        const pr = target.radius * canvasElement.height; // 半径は画面の長辺(height)基準にする
+        
+        canvasCtx.globalAlpha = isTooClose ? 0.3 : 1.0;
+
+        canvasCtx.beginPath();
+        canvasCtx.arc(px, py, pr, 0, 2 * Math.PI);
+        canvasCtx.fillStyle = '#FFD700'; 
+        canvasCtx.fill();
+        canvasCtx.lineWidth = 3;
+        canvasCtx.strokeStyle = '#FFA500'; 
+        canvasCtx.stroke();
+        
+        canvasCtx.beginPath();
+        canvasCtx.arc(px, py, pr * 0.7, 0, 2 * Math.PI);
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = '#FFA500';
+        canvasCtx.stroke();
+        
+        canvasCtx.save();
+        canvasCtx.translate(px, py);
+        
+        // 🌟 星マークをUIに合わせて90度回転して描画 🌟
+        canvasCtx.rotate(-Math.PI / 2); // -90度回転
+        
+        canvasCtx.fillStyle = '#FFA500';
+        canvasCtx.font = `bold ${pr * 1.1}px sans-serif`;
+        canvasCtx.textAlign = "center";
+        canvasCtx.textBaseline = "middle";
+        canvasCtx.fillText("★", 0, pr * 0.05);
+        canvasCtx.restore();
+        
+        canvasCtx.globalAlpha = 1.0;
+    }
+    
     canvasCtx.restore();
 }
 
-function processGame(visOK, isL, isH, isV, ha, ka) {
-    const isGood = visOK && !isL && isH && isV && ha >= 155 && ka >= 155;
-    const msg = document.getElementById('msg_area');
-    if (state === "SETUP") {
-        msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
-        msg.className = showInitialMsg ? "msg-waiting" : "";
-        if (isGood && !countdownTimer) startCountdown();
-    } else if (state === "COUNTDOWN") {
-        if (!isGood) cancelCountdown();
-    } else if (state === "BATTLE") {
-        updateBattle(isGood);
-        updateLyrics();
+function processGame(landmarks) {
+    // 🌟 AIの認識基準も「縦横逆」で判定します。
+    // yが横方向、xが縦方向になる
+    const pointsToCheck = [landmarks[11], landmarks[12], landmarks[27], landmarks[28]];
+    const allVisibleAndInFrame = pointsToCheck.every(pt => 
+        pt && pt.visibility > 0.5 && 
+        pt.y > 0.1 && pt.y < 0.9 && // 横方向の収まり
+        pt.x > 0.1 && pt.x < 0.95   // 縦方向の収まり
+    );
+
+    const msg = document.getElementById('center_message');
+
+    if (gameState === "CALIBRATING") {
+        if (allVisibleAndInFrame) {
+            gameState = "COUNTDOWN";
+            startCountdown();
+        } else {
+            msg.style.fontSize = "24px";
+            msg.innerText = "全身を枠に入れて！";
+        }
+    } 
+    else if (gameState === "COUNTDOWN") {
+        if (!allVisibleAndInFrame) {
+            gameState = "CALIBRATING"; 
+            msg.style.fontSize = "24px";
+            msg.innerText = "枠から出たぞ！もう一度全身を入れて！";
+        }
+    }
+    else if (gameState === "PLAYING") {
+        const leftShoulder = landmarks[11];
+        const rightShoulder = landmarks[12];
+        if (leftShoulder && rightShoulder) {
+            // 肩幅はY軸の差分で測る
+            const currentWidth = Math.abs(leftShoulder.y - rightShoulder.y);
+            
+            if (baseShoulderWidth === 0) baseShoulderWidth = currentWidth;
+
+            if (currentWidth > baseShoulderWidth * 1.15) {
+                isTooClose = true;
+                document.getElementById('warning_message').style.display = 'block';
+            } else {
+                isTooClose = false;
+                document.getElementById('warning_message').style.display = 'none';
+            }
+        }
+
+        const trackedPoints = [15, 16]; 
+        
+        if (target.active && !isTooClose) {
+            let hit = false;
+            trackedPoints.forEach(idx => {
+                const pt = landmarks[idx];
+                if (pt && pt.visibility > 0.5) {
+                    const dist = Math.hypot(pt.x - target.x, pt.y - target.y);
+                    // y軸（元のx軸相当）のスケールに合わせて半径を補正して判定
+                    if (dist < target.radius * (canvasElement.height / canvasElement.width)) hit = true;
+                }
+            });
+
+            if (hit) {
+                target.active = false;
+                score++;
+                document.getElementById('score_display').innerText = score;
+                playCoinSound();
+                setTimeout(spawnTarget, 200);
+            }
+        }
     }
 }
 
 function startCountdown() {
-    state = "COUNTDOWN"; countdownVal = 3;
-    const msg = document.getElementById('msg_area'); msg.className = "msg-countdown"; msg.innerText = countdownVal;
+    countdownValue = 5;
+    const msg = document.getElementById('center_message');
+    msg.style.fontSize = "150px"; 
+    msg.innerText = countdownValue;
     
     countdownTimer = setInterval(() => {
-        countdownVal--;
-        if (countdownVal > 0) { msg.innerText = countdownVal; playSound('tick'); } 
-        else { clearInterval(countdownTimer); countdownTimer = null; beginBattle(); }
+        if (gameState !== "COUNTDOWN") {
+            clearInterval(countdownTimer);
+            return;
+        }
+
+        countdownValue--;
+        if (countdownValue > 0) {
+            msg.innerText = countdownValue;
+        } else {
+            clearInterval(countdownTimer);
+            msg.style.display = 'none';
+            document.getElementById('body_guide').style.display = 'none';
+            startGame();
+        }
     }, 1000);
 }
 
-function cancelCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } state = "SETUP"; }
-
-function beginBattle() { 
-    state = "BATTLE"; holdTime = 0; 
+function startGame() {
+    gameState = "PLAYING";
+    spawnTarget();
+    startBGM(); 
     
-    const msg = document.getElementById('msg_area');
-    msg.innerText = "";
-    msg.className = "";
-    
-    bgm.currentTime = 0;
-    bgm.play().catch(e => console.log("BGM Error:", e));
-    
-    try { const stream = canvasElement.captureStream(30); mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/mp4' }); recordedChunks = []; mediaRecorder.ondataavailable = e => recordedChunks.push(e.data); mediaRecorder.onstop = saveVideo; mediaRecorder.start(); } catch(e) {} 
-}
-
-function updateBattle(isGood) {
-    const ngL = document.getElementById('ng_label'), ngC = document.getElementById('ng_countdown'), tD = document.getElementById('timer');
-    
-    if (isGood) {
-        if (ngTimeStart) { 
-            ngTimeStart = null; ngL.style.display = "none"; ngC.innerText = ""; lastNgCount = -1; 
-            bgm.play(); 
+    try {
+        const stream = canvasElement.captureStream(30);
+        let options = {};
+        if (MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { mimeType: 'video/mp4' };
+            videoExtension = 'mp4';
+            videoMimeType = 'video/mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+            options = { mimeType: 'video/webm' };
+            videoExtension = 'webm';
+            videoMimeType = 'video/webm';
         }
-        
-        holdTime = bgm.currentTime; 
-        tD.innerText = holdTime.toFixed(2); 
-        tD.style.color = "#ffea00"; 
-        wasGoodPose = true;
-    } else {
-        if (wasGoodPose) { playSound('buzzer'); wasGoodPose = false; bgm.pause(); }
-        tD.style.color = "#ff0055";
-        if (!ngTimeStart) ngTimeStart = Date.now();
-        let remain = (5.0 - (Date.now() - ngTimeStart) / 1000).toFixed(1);
-        if (Math.ceil(remain) !== lastNgCount && remain > 0) { playSound('tick'); lastNgCount = Math.ceil(remain); }
-        ngL.style.display = "block"; ngC.innerText = remain;
-        if (remain <= 0) finishGame();
+
+        mediaRecorder = new MediaRecorder(stream, options);
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = saveVideo;
+        mediaRecorder.start();
+    } catch(err) {
+        console.log("録画エラー: ", err);
     }
+    
+    timerInterval = setInterval(() => {
+        if (!isTooClose) {
+            timeLeft--;
+            document.getElementById('time_display').innerText = timeLeft;
+            if (timeLeft <= 0) finishGame();
+        }
+    }, 1000);
 }
 
 function finishGame() {
-    if (state === "FINISHED") return; state = "FINISHED"; bgm.pause();
+    gameState = "FINISHED";
+    clearInterval(timerInterval);
+    clearInterval(bgmInterval); 
+    document.getElementById('warning_message').style.display = 'none';
+
     if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-    document.getElementById('result_overlay').style.display = "flex";
-    const final = Math.floor(holdTime); document.getElementById('final_score').innerText = final;
     
-    fetch(`${GAS_URL}?action=plank_clear&column=AN&uid=${playId}&pass=${playPass}&score=${final}`)
-        .then(res => res.json()).then(d => document.getElementById('save_status').innerText = d.success ? "通信完了！AN列へ記録したよ！" : "エラー: "+d.message);
+    document.getElementById('result_overlay').style.display = "flex";
+    document.getElementById('final_score').innerText = score;
+    
+    fetch(`${GAS_URL}?action=plank_clear&uid=${playId}&pass=${playPass}&score=${score}`)
+        .then(res => res.json())
+        .then(data => {})
+        .catch(err => {});
 }
 
 function saveVideo() {
-    const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+    const blob = new Blob(recordedChunks, { type: videoMimeType || 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const link = document.getElementById('download_link');
-    link.href = url; link.download = `STNV_PLANK_${new Date().getTime()}.mp4`;
-    link.style.display = "inline-block";
+    link.href = url;
+    link.download = `STNV_AR_SQUAT_${new Date().getTime()}.${videoExtension}`;
+    link.style.display = "inline-block"; 
 }
 </script>
 </body>
