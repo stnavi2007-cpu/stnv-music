@@ -51,11 +51,13 @@
         }
         
         .overlay { 
+            /* ▼ 修正：スマホ横置き時にUIが見やすいように90度回転 ▼ */
             position: fixed; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
+            top: 50%; 
+            left: 50%; 
+            width: 100vh; 
+            height: 100vw; 
+            transform: translate(-50%, -50%) rotate(90deg);
             background-color: #050914;
             background-image: 
                 linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px), 
@@ -181,7 +183,8 @@
         /* ---------------------------------------------------
            GAME HUD (UI LAYER)
         --------------------------------------------------- */
-        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: block; }
+        /* ▼ 修正：プレイ中のUIレイヤーも90度回転 ▼ */
+        .ui-layer { position: absolute; top: 50%; left: 50%; width: 100vh; height: 100vw; transform: translate(-50%, -50%) rotate(90deg); pointer-events: none; z-index: 10; display: block; }
         
         .header { display: flex; justify-content: space-between; width: 100%; position: absolute; top: 30px; left: 0; padding: 0 5%; box-sizing: border-box; }
         
@@ -520,14 +523,11 @@ function onResults(results) {
         const kAngle = calculateAngle(hip, knee, ankle);
         
         const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
-        /* ▼ 修正：スマホ横置き時（画面上では体が縦）に対応 ▼ */
         const isH = angleToHorizontal > 55 && angleToHorizontal < 125;
         
-        /* ▼ 修正：腕が画面の横方向（現実の床方向）を向いているか判定 ▼ */
         const armAngle = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
         const isV = armAngle < 30 || armAngle > 150;
         
-        /* ▼ 修正：肩と肘のX座標（現実の高さ）が重なっていないか判定 ▼ */
         const isL = Math.abs(shoulder.x - elbow.x) < 0.08;
         
         let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
