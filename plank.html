@@ -522,21 +522,22 @@ function onResults(results) {
         
         const angleToHorizontal = Math.abs(Math.atan2(ankle.y - shoulder.y, ankle.x - shoulder.x) * 180 / Math.PI);
         /* ▼ 修正：スマホが横向きのため、画面上では体は「縦方向」に伸びます ▼ */
-        const isH = angleToHorizontal > 55 && angleToHorizontal < 125;
+        const isH = angleToHorizontal > 45 && angleToHorizontal < 135;
         
         const armAngle = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
         /* ▼ 修正：腕は床に向かうため、画面上では「横方向」に伸びます ▼ */
-        const isV = armAngle < 35 || armAngle > 145;
+        const isV = armAngle < 45 || armAngle > 135;
         
         /* ▼ 修正：重力（床）はX軸になります。肘を基準に腰と膝の高さをX座標で計算します ▼ */
         const shHeight = Math.abs(shoulder.x - elbow.x);
         const hipHeight = Math.abs(hip.x - elbow.x);
         const kneeHeight = Math.abs(knee.x - elbow.x);
         
-        /* NG条件：腰が落ちている、膝が着いている、お尻が上がりすぎている */
-        const isL = (hipHeight < 0.08) || (kneeHeight < 0.05) || (hipHeight > shHeight * 1.3);
+        /* ▼ 修正：肩の高さを基準とし、膝や腰が床に着いていないか（比率で）判定 ▼ */
+        const isL = (hipHeight < shHeight * 0.3) || (hipHeight > shHeight * 1.5) || (kneeHeight < shHeight * 0.2);
         
-        let c = (hAngle < 150 || kAngle < 150 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
+        /* ▼ 修正：体の一直線判定を140度に緩和し、自然な斜めの姿勢を許容 ▼ */
+        let c = (hAngle < 140 || kAngle < 140 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
@@ -549,8 +550,8 @@ function onResults(results) {
 }
 
 function processGame(visOK, isL, isH, isV, ha, ka) {
-    /* ▼ 修正：160度から150度に緩和 ▼ */
-    const isGood = visOK && !isL && isH && isV && ha >= 150 && ka >= 150;
+    /* ▼ 修正：160度から140度に緩和 ▼ */
+    const isGood = visOK && !isL && isH && isV && ha >= 140 && ka >= 140;
     const msg = document.getElementById('msg_area');
     if (state === "SETUP") {
         msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
