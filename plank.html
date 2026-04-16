@@ -526,9 +526,11 @@ function onResults(results) {
         const armAngle = Math.abs(Math.atan2(elbow.y - shoulder.y, elbow.x - shoulder.x) * 180 / Math.PI);
         const isV = armAngle < 30 || armAngle > 150;
         
-        const isL = Math.abs(shoulder.x - elbow.x) < 0.08;
+        /* ▼ 修正箇所：肩・腰・膝のいずれかが床（肘の高さ）に落ちていたらNG ▼ */
+        const isL = Math.abs(shoulder.x - elbow.x) < 0.08 || Math.abs(hip.x - elbow.x) < 0.08 || Math.abs(knee.x - elbow.x) < 0.08;
         
-        let c = (hAngle < 155 || kAngle < 155 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
+        /* ▼ 修正箇所：155度から160度に厳格化 ▼ */
+        let c = (hAngle < 160 || kAngle < 160 || !isH || !isV || isL || !visOK) ? '#FF0000' : '#00FFFF';
         const w = canvasElement.width, h = canvasElement.height;
         canvasCtx.lineWidth = 4; canvasCtx.strokeStyle = c;
         canvasCtx.beginPath(); canvasCtx.moveTo(shoulder.x*w, shoulder.y*h); canvasCtx.lineTo(elbow.x*w, elbow.y*h); canvasCtx.stroke();
@@ -541,7 +543,8 @@ function onResults(results) {
 }
 
 function processGame(visOK, isL, isH, isV, ha, ka) {
-    const isGood = visOK && !isL && isH && isV && ha >= 155 && ka >= 155;
+    /* ▼ 修正箇所：155度から160度に厳格化 ▼ */
+    const isGood = visOK && !isL && isH && isV && ha >= 160 && ka >= 160;
     const msg = document.getElementById('msg_area');
     if (state === "SETUP") {
         msg.innerText = showInitialMsg ? "カメラを横向きにして撮影してね！" : "";
